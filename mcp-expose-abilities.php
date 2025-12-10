@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Exposes WordPress abilities via MCP and registers content management abilities for posts, pages, and media.
- * Version: 1.5.0
+ * Version: 2.0.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -2875,6 +2875,1671 @@ function mcp_register_content_abilities(): void {
 					'readonly'    => false,
 					'destructive' => false,
 					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MENUS - List
+	// =========================================================================
+	wp_register_ability(
+		'menus/list',
+		array(
+			'label'               => 'List Menus',
+			'description'         => 'Lists all registered navigation menus and their locations.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => (object) array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'   => array( 'type' => 'boolean' ),
+					'menus'     => array( 'type' => 'array' ),
+					'locations' => array( 'type' => 'object' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$menus     = wp_get_nav_menus();
+				$locations = get_nav_menu_locations();
+				$registered_locations = get_registered_nav_menus();
+
+				$menu_list = array();
+				foreach ( $menus as $menu ) {
+					$menu_list[] = array(
+						'id'          => $menu->term_id,
+						'name'        => $menu->name,
+						'slug'        => $menu->slug,
+						'description' => $menu->description,
+						'count'       => $menu->count,
+					);
+				}
+
+				$location_list = array();
+				foreach ( $registered_locations as $location => $description ) {
+					$location_list[ $location ] = array(
+						'description' => $description,
+						'menu_id'     => $locations[ $location ] ?? 0,
+					);
+				}
+
+				return array(
+					'success'   => true,
+					'menus'     => $menu_list,
+					'locations' => $location_list,
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MENUS - Get Menu Items
+	// =========================================================================
+	wp_register_ability(
+		'menus/get-items',
+		array(
+			'label'               => 'Get Menu Items',
+			'description'         => 'Retrieves all items from a specific menu by ID or location.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'id'       => array(
+						'type'        => 'integer',
+						'description' => 'Menu ID.',
+					),
+					'location' => array(
+						'type'        => 'string',
+						'description' => 'Menu location slug (used if ID not provided).',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'menu'    => array( 'type' => 'object' ),
+					'items'   => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input   = is_array( $input ) ? $input : array();
+				$menu_id = 0;
+
+				if ( ! empty( $input['id'] ) ) {
+					$menu_id = (int) $input['id'];
+				} elseif ( ! empty( $input['location'] ) ) {
+					$locations = get_nav_menu_locations();
+					$menu_id   = $locations[ $input['location'] ] ?? 0;
+				}
+
+				if ( ! $menu_id ) {
+					return array( 'success' => false, 'message' => 'Menu ID or location required' );
+				}
+
+				$menu = wp_get_nav_menu_object( $menu_id );
+				if ( ! $menu ) {
+					return array( 'success' => false, 'message' => 'Menu not found' );
+				}
+
+				$items      = wp_get_nav_menu_items( $menu_id );
+				$item_list  = array();
+
+				if ( $items ) {
+					foreach ( $items as $item ) {
+						$item_list[] = array(
+							'id'          => $item->ID,
+							'title'       => $item->title,
+							'url'         => $item->url,
+							'target'      => $item->target,
+							'attr_title'  => $item->attr_title,
+							'description' => $item->description,
+							'classes'     => $item->classes,
+							'xfn'         => $item->xfn,
+							'parent'      => (int) $item->menu_item_parent,
+							'order'       => (int) $item->menu_order,
+							'object'      => $item->object,
+							'object_id'   => (int) $item->object_id,
+							'type'        => $item->type,
+						);
+					}
+				}
+
+				return array(
+					'success' => true,
+					'menu'    => array(
+						'id'    => $menu->term_id,
+						'name'  => $menu->name,
+						'slug'  => $menu->slug,
+						'count' => $menu->count,
+					),
+					'items'   => $item_list,
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MENUS - Create Menu
+	// =========================================================================
+	wp_register_ability(
+		'menus/create',
+		array(
+			'label'               => 'Create Menu',
+			'description'         => 'Creates a new navigation menu.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'name' ),
+				'properties'           => array(
+					'name' => array(
+						'type'        => 'string',
+						'description' => 'Menu name.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'id'      => array( 'type' => 'integer' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['name'] ) ) {
+					return array( 'success' => false, 'message' => 'Menu name is required' );
+				}
+
+				$menu_id = wp_create_nav_menu( sanitize_text_field( $input['name'] ) );
+
+				if ( is_wp_error( $menu_id ) ) {
+					return array( 'success' => false, 'message' => $menu_id->get_error_message() );
+				}
+
+				return array(
+					'success' => true,
+					'id'      => $menu_id,
+					'message' => 'Menu created successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MENUS - Add Menu Item
+	// =========================================================================
+	wp_register_ability(
+		'menus/add-item',
+		array(
+			'label'               => 'Add Menu Item',
+			'description'         => 'Adds a new item to a navigation menu.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'menu_id', 'title' ),
+				'properties'           => array(
+					'menu_id'   => array(
+						'type'        => 'integer',
+						'description' => 'Menu ID to add item to.',
+					),
+					'title'     => array(
+						'type'        => 'string',
+						'description' => 'Menu item title.',
+					),
+					'url'       => array(
+						'type'        => 'string',
+						'description' => 'URL for custom links.',
+					),
+					'object'    => array(
+						'type'        => 'string',
+						'description' => 'Object type (page, post, category, custom).',
+						'default'     => 'custom',
+					),
+					'object_id' => array(
+						'type'        => 'integer',
+						'description' => 'Object ID (for pages/posts/categories).',
+					),
+					'parent'    => array(
+						'type'        => 'integer',
+						'description' => 'Parent menu item ID (for submenus).',
+						'default'     => 0,
+					),
+					'position'  => array(
+						'type'        => 'integer',
+						'description' => 'Menu position/order.',
+					),
+					'target'    => array(
+						'type'        => 'string',
+						'enum'        => array( '', '_blank' ),
+						'description' => 'Link target (_blank for new window).',
+					),
+					'classes'   => array(
+						'type'        => 'string',
+						'description' => 'CSS classes (space-separated).',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'id'      => array( 'type' => 'integer' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['menu_id'] ) ) {
+					return array( 'success' => false, 'message' => 'Menu ID is required' );
+				}
+				if ( empty( $input['title'] ) ) {
+					return array( 'success' => false, 'message' => 'Title is required' );
+				}
+
+				$menu = wp_get_nav_menu_object( $input['menu_id'] );
+				if ( ! $menu ) {
+					return array( 'success' => false, 'message' => 'Menu not found' );
+				}
+
+				$object    = $input['object'] ?? 'custom';
+				$object_id = $input['object_id'] ?? 0;
+				$type      = 'custom';
+
+				if ( 'page' === $object ) {
+					$type = 'post_type';
+				} elseif ( 'post' === $object ) {
+					$type = 'post_type';
+				} elseif ( 'category' === $object ) {
+					$type      = 'taxonomy';
+					$object    = 'category';
+				}
+
+				$item_data = array(
+					'menu-item-title'     => sanitize_text_field( $input['title'] ),
+					'menu-item-url'       => $input['url'] ?? '',
+					'menu-item-object'    => $object,
+					'menu-item-object-id' => $object_id,
+					'menu-item-type'      => $type,
+					'menu-item-parent-id' => $input['parent'] ?? 0,
+					'menu-item-position'  => $input['position'] ?? 0,
+					'menu-item-target'    => $input['target'] ?? '',
+					'menu-item-classes'   => $input['classes'] ?? '',
+					'menu-item-status'    => 'publish',
+				);
+
+				$item_id = wp_update_nav_menu_item( $input['menu_id'], 0, $item_data );
+
+				if ( is_wp_error( $item_id ) ) {
+					return array( 'success' => false, 'message' => $item_id->get_error_message() );
+				}
+
+				return array(
+					'success' => true,
+					'id'      => $item_id,
+					'message' => 'Menu item added successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MENUS - Update Menu Item
+	// =========================================================================
+	wp_register_ability(
+		'menus/update-item',
+		array(
+			'label'               => 'Update Menu Item',
+			'description'         => 'Updates an existing menu item.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'menu_id', 'item_id' ),
+				'properties'           => array(
+					'menu_id'  => array(
+						'type'        => 'integer',
+						'description' => 'Menu ID.',
+					),
+					'item_id'  => array(
+						'type'        => 'integer',
+						'description' => 'Menu item ID to update.',
+					),
+					'title'    => array(
+						'type'        => 'string',
+						'description' => 'New title.',
+					),
+					'url'      => array(
+						'type'        => 'string',
+						'description' => 'New URL.',
+					),
+					'parent'   => array(
+						'type'        => 'integer',
+						'description' => 'New parent menu item ID.',
+					),
+					'position' => array(
+						'type'        => 'integer',
+						'description' => 'New position/order.',
+					),
+					'target'   => array(
+						'type'        => 'string',
+						'description' => 'Link target.',
+					),
+					'classes'  => array(
+						'type'        => 'string',
+						'description' => 'CSS classes.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['menu_id'] ) || empty( $input['item_id'] ) ) {
+					return array( 'success' => false, 'message' => 'Menu ID and item ID are required' );
+				}
+
+				$item = get_post( $input['item_id'] );
+				if ( ! $item || 'nav_menu_item' !== $item->post_type ) {
+					return array( 'success' => false, 'message' => 'Menu item not found' );
+				}
+
+				$item_data = array(
+					'menu-item-status' => 'publish',
+				);
+
+				if ( isset( $input['title'] ) ) {
+					$item_data['menu-item-title'] = sanitize_text_field( $input['title'] );
+				}
+				if ( isset( $input['url'] ) ) {
+					$item_data['menu-item-url'] = esc_url_raw( $input['url'] );
+				}
+				if ( isset( $input['parent'] ) ) {
+					$item_data['menu-item-parent-id'] = (int) $input['parent'];
+				}
+				if ( isset( $input['position'] ) ) {
+					$item_data['menu-item-position'] = (int) $input['position'];
+				}
+				if ( isset( $input['target'] ) ) {
+					$item_data['menu-item-target'] = $input['target'];
+				}
+				if ( isset( $input['classes'] ) ) {
+					$item_data['menu-item-classes'] = $input['classes'];
+				}
+
+				$result = wp_update_nav_menu_item( $input['menu_id'], $input['item_id'], $item_data );
+
+				if ( is_wp_error( $result ) ) {
+					return array( 'success' => false, 'message' => $result->get_error_message() );
+				}
+
+				return array(
+					'success' => true,
+					'message' => 'Menu item updated successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MENUS - Delete Menu Item
+	// =========================================================================
+	wp_register_ability(
+		'menus/delete-item',
+		array(
+			'label'               => 'Delete Menu Item',
+			'description'         => 'Deletes a menu item from a navigation menu.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'item_id' ),
+				'properties'           => array(
+					'item_id' => array(
+						'type'        => 'integer',
+						'description' => 'Menu item ID to delete.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['item_id'] ) ) {
+					return array( 'success' => false, 'message' => 'Item ID is required' );
+				}
+
+				$item = get_post( $input['item_id'] );
+				if ( ! $item || 'nav_menu_item' !== $item->post_type ) {
+					return array( 'success' => false, 'message' => 'Menu item not found' );
+				}
+
+				$result = wp_delete_post( $input['item_id'], true );
+
+				if ( ! $result ) {
+					return array( 'success' => false, 'message' => 'Failed to delete menu item' );
+				}
+
+				return array(
+					'success' => true,
+					'message' => 'Menu item deleted successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MENUS - Assign to Location
+	// =========================================================================
+	wp_register_ability(
+		'menus/assign-location',
+		array(
+			'label'               => 'Assign Menu to Location',
+			'description'         => 'Assigns a menu to a theme location.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'menu_id', 'location' ),
+				'properties'           => array(
+					'menu_id'  => array(
+						'type'        => 'integer',
+						'description' => 'Menu ID to assign (use 0 to unassign).',
+					),
+					'location' => array(
+						'type'        => 'string',
+						'description' => 'Theme location slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( ! isset( $input['menu_id'] ) || empty( $input['location'] ) ) {
+					return array( 'success' => false, 'message' => 'Menu ID and location are required' );
+				}
+
+				$registered = get_registered_nav_menus();
+				if ( ! isset( $registered[ $input['location'] ] ) ) {
+					return array( 'success' => false, 'message' => 'Invalid menu location' );
+				}
+
+				$locations = get_nav_menu_locations();
+				$locations[ $input['location'] ] = (int) $input['menu_id'];
+				set_theme_mod( 'nav_menu_locations', $locations );
+
+				$action = $input['menu_id'] > 0 ? 'assigned' : 'unassigned';
+				return array(
+					'success' => true,
+					'message' => "Menu {$action} to location successfully",
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// WIDGETS - List Sidebars
+	// =========================================================================
+	wp_register_ability(
+		'widgets/list-sidebars',
+		array(
+			'label'               => 'List Widget Sidebars',
+			'description'         => 'Lists all registered widget sidebars/areas.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => (object) array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'  => array( 'type' => 'boolean' ),
+					'sidebars' => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				global $wp_registered_sidebars;
+
+				$sidebars = array();
+				foreach ( $wp_registered_sidebars as $id => $sidebar ) {
+					$sidebars[] = array(
+						'id'          => $id,
+						'name'        => $sidebar['name'],
+						'description' => $sidebar['description'] ?? '',
+					);
+				}
+
+				return array(
+					'success'  => true,
+					'sidebars' => $sidebars,
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// WIDGETS - Get Sidebar Widgets
+	// =========================================================================
+	wp_register_ability(
+		'widgets/get-sidebar',
+		array(
+			'label'               => 'Get Sidebar Widgets',
+			'description'         => 'Gets all widgets in a specific sidebar.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'sidebar_id' ),
+				'properties'           => array(
+					'sidebar_id' => array(
+						'type'        => 'string',
+						'description' => 'Sidebar ID.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'sidebar' => array( 'type' => 'object' ),
+					'widgets' => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				global $wp_registered_sidebars, $wp_registered_widgets;
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['sidebar_id'] ) ) {
+					return array( 'success' => false, 'message' => 'Sidebar ID is required' );
+				}
+
+				$sidebar_id = $input['sidebar_id'];
+				if ( ! isset( $wp_registered_sidebars[ $sidebar_id ] ) ) {
+					return array( 'success' => false, 'message' => 'Sidebar not found' );
+				}
+
+				$sidebars_widgets = wp_get_sidebars_widgets();
+				$widget_ids       = $sidebars_widgets[ $sidebar_id ] ?? array();
+				$widgets          = array();
+
+				foreach ( $widget_ids as $widget_id ) {
+					if ( isset( $wp_registered_widgets[ $widget_id ] ) ) {
+						$widget = $wp_registered_widgets[ $widget_id ];
+						$widgets[] = array(
+							'id'   => $widget_id,
+							'name' => $widget['name'],
+						);
+					}
+				}
+
+				return array(
+					'success' => true,
+					'sidebar' => array(
+						'id'   => $sidebar_id,
+						'name' => $wp_registered_sidebars[ $sidebar_id ]['name'],
+					),
+					'widgets' => $widgets,
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// WIDGETS - List Available Widgets
+	// =========================================================================
+	wp_register_ability(
+		'widgets/list-available',
+		array(
+			'label'               => 'List Available Widgets',
+			'description'         => 'Lists all widget types available for use.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => (object) array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'widgets' => array( 'type' => 'array' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				global $wp_widget_factory;
+
+				$widgets = array();
+				foreach ( $wp_widget_factory->widgets as $class => $widget ) {
+					$widgets[] = array(
+						'id_base'     => $widget->id_base,
+						'name'        => $widget->name,
+						'description' => $widget->widget_options['description'] ?? '',
+					);
+				}
+
+				return array(
+					'success' => true,
+					'widgets' => $widgets,
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_theme_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// USERS - List
+	// =========================================================================
+	wp_register_ability(
+		'users/list',
+		array(
+			'label'               => 'List Users (Extended)',
+			'description'         => 'Lists all users with detailed information including roles and capabilities.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'role'     => array(
+						'type'        => 'string',
+						'description' => 'Filter by role (administrator, editor, author, contributor, subscriber).',
+					),
+					'per_page' => array(
+						'type'        => 'integer',
+						'default'     => 20,
+						'minimum'     => 1,
+						'maximum'     => 100,
+					),
+					'page'     => array(
+						'type'        => 'integer',
+						'default'     => 1,
+						'minimum'     => 1,
+					),
+					'orderby'  => array(
+						'type'    => 'string',
+						'enum'    => array( 'ID', 'login', 'nicename', 'email', 'registered', 'display_name' ),
+						'default' => 'display_name',
+					),
+					'order'    => array(
+						'type'    => 'string',
+						'enum'    => array( 'ASC', 'DESC' ),
+						'default' => 'ASC',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'     => array( 'type' => 'boolean' ),
+					'users'       => array( 'type' => 'array' ),
+					'total'       => array( 'type' => 'integer' ),
+					'total_pages' => array( 'type' => 'integer' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				$args = array(
+					'number'  => $input['per_page'] ?? 20,
+					'paged'   => $input['page'] ?? 1,
+					'orderby' => $input['orderby'] ?? 'display_name',
+					'order'   => $input['order'] ?? 'ASC',
+				);
+
+				if ( ! empty( $input['role'] ) ) {
+					$args['role'] = $input['role'];
+				}
+
+				$query = new WP_User_Query( $args );
+				$users = array();
+
+				foreach ( $query->get_results() as $user ) {
+					$users[] = array(
+						'id'           => $user->ID,
+						'login'        => $user->user_login,
+						'email'        => $user->user_email,
+						'display_name' => $user->display_name,
+						'nicename'     => $user->user_nicename,
+						'url'          => $user->user_url,
+						'registered'   => $user->user_registered,
+						'roles'        => $user->roles,
+					);
+				}
+
+				$total = $query->get_total();
+				$per_page = $input['per_page'] ?? 20;
+
+				return array(
+					'success'     => true,
+					'users'       => $users,
+					'total'       => $total,
+					'total_pages' => (int) ceil( $total / $per_page ),
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'list_users' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// USERS - Get
+	// =========================================================================
+	wp_register_ability(
+		'users/get',
+		array(
+			'label'               => 'Get User',
+			'description'         => 'Gets detailed information about a specific user.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'id'    => array(
+						'type'        => 'integer',
+						'description' => 'User ID.',
+					),
+					'login' => array(
+						'type'        => 'string',
+						'description' => 'Username (used if ID not provided).',
+					),
+					'email' => array(
+						'type'        => 'string',
+						'description' => 'Email address (used if ID and login not provided).',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'user'    => array( 'type' => 'object' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+				$user  = null;
+
+				if ( ! empty( $input['id'] ) ) {
+					$user = get_user_by( 'id', $input['id'] );
+				} elseif ( ! empty( $input['login'] ) ) {
+					$user = get_user_by( 'login', $input['login'] );
+				} elseif ( ! empty( $input['email'] ) ) {
+					$user = get_user_by( 'email', $input['email'] );
+				}
+
+				if ( ! $user ) {
+					return array( 'success' => false, 'message' => 'User not found' );
+				}
+
+				return array(
+					'success' => true,
+					'user'    => array(
+						'id'           => $user->ID,
+						'login'        => $user->user_login,
+						'email'        => $user->user_email,
+						'display_name' => $user->display_name,
+						'first_name'   => $user->first_name,
+						'last_name'    => $user->last_name,
+						'nickname'     => $user->nickname,
+						'nicename'     => $user->user_nicename,
+						'url'          => $user->user_url,
+						'description'  => $user->description,
+						'registered'   => $user->user_registered,
+						'roles'        => $user->roles,
+						'caps'         => array_keys( array_filter( $user->allcaps ) ),
+					),
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'list_users' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// USERS - Create
+	// =========================================================================
+	wp_register_ability(
+		'users/create',
+		array(
+			'label'               => 'Create User',
+			'description'         => 'Creates a new user account.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'username', 'email' ),
+				'properties'           => array(
+					'username'     => array(
+						'type'        => 'string',
+						'description' => 'Username (login name).',
+					),
+					'email'        => array(
+						'type'        => 'string',
+						'description' => 'Email address.',
+					),
+					'password'     => array(
+						'type'        => 'string',
+						'description' => 'Password (auto-generated if not provided).',
+					),
+					'first_name'   => array(
+						'type'        => 'string',
+						'description' => 'First name.',
+					),
+					'last_name'    => array(
+						'type'        => 'string',
+						'description' => 'Last name.',
+					),
+					'display_name' => array(
+						'type'        => 'string',
+						'description' => 'Display name.',
+					),
+					'role'         => array(
+						'type'        => 'string',
+						'description' => 'User role.',
+						'default'     => 'subscriber',
+					),
+					'url'          => array(
+						'type'        => 'string',
+						'description' => 'User website URL.',
+					),
+					'description'  => array(
+						'type'        => 'string',
+						'description' => 'User bio/description.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'  => array( 'type' => 'boolean' ),
+					'id'       => array( 'type' => 'integer' ),
+					'message'  => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['username'] ) ) {
+					return array( 'success' => false, 'message' => 'Username is required' );
+				}
+				if ( empty( $input['email'] ) ) {
+					return array( 'success' => false, 'message' => 'Email is required' );
+				}
+
+				$userdata = array(
+					'user_login' => sanitize_user( $input['username'] ),
+					'user_email' => sanitize_email( $input['email'] ),
+					'user_pass'  => $input['password'] ?? wp_generate_password(),
+					'role'       => $input['role'] ?? 'subscriber',
+				);
+
+				if ( ! empty( $input['first_name'] ) ) {
+					$userdata['first_name'] = sanitize_text_field( $input['first_name'] );
+				}
+				if ( ! empty( $input['last_name'] ) ) {
+					$userdata['last_name'] = sanitize_text_field( $input['last_name'] );
+				}
+				if ( ! empty( $input['display_name'] ) ) {
+					$userdata['display_name'] = sanitize_text_field( $input['display_name'] );
+				}
+				if ( ! empty( $input['url'] ) ) {
+					$userdata['user_url'] = esc_url_raw( $input['url'] );
+				}
+				if ( ! empty( $input['description'] ) ) {
+					$userdata['description'] = sanitize_textarea_field( $input['description'] );
+				}
+
+				$user_id = wp_insert_user( $userdata );
+
+				if ( is_wp_error( $user_id ) ) {
+					return array( 'success' => false, 'message' => $user_id->get_error_message() );
+				}
+
+				return array(
+					'success' => true,
+					'id'      => $user_id,
+					'message' => 'User created successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'create_users' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// USERS - Update
+	// =========================================================================
+	wp_register_ability(
+		'users/update',
+		array(
+			'label'               => 'Update User',
+			'description'         => 'Updates an existing user. Only provided fields will be updated.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id' ),
+				'properties'           => array(
+					'id'           => array(
+						'type'        => 'integer',
+						'description' => 'User ID to update.',
+					),
+					'email'        => array(
+						'type'        => 'string',
+						'description' => 'New email address.',
+					),
+					'password'     => array(
+						'type'        => 'string',
+						'description' => 'New password.',
+					),
+					'first_name'   => array(
+						'type'        => 'string',
+						'description' => 'New first name.',
+					),
+					'last_name'    => array(
+						'type'        => 'string',
+						'description' => 'New last name.',
+					),
+					'display_name' => array(
+						'type'        => 'string',
+						'description' => 'New display name.',
+					),
+					'nickname'     => array(
+						'type'        => 'string',
+						'description' => 'New nickname.',
+					),
+					'role'         => array(
+						'type'        => 'string',
+						'description' => 'New role.',
+					),
+					'url'          => array(
+						'type'        => 'string',
+						'description' => 'New website URL.',
+					),
+					'description'  => array(
+						'type'        => 'string',
+						'description' => 'New bio/description.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'User ID is required' );
+				}
+
+				$user = get_user_by( 'id', $input['id'] );
+				if ( ! $user ) {
+					return array( 'success' => false, 'message' => 'User not found' );
+				}
+
+				$userdata = array( 'ID' => $input['id'] );
+
+				if ( isset( $input['email'] ) ) {
+					$userdata['user_email'] = sanitize_email( $input['email'] );
+				}
+				if ( isset( $input['password'] ) ) {
+					$userdata['user_pass'] = $input['password'];
+				}
+				if ( isset( $input['first_name'] ) ) {
+					$userdata['first_name'] = sanitize_text_field( $input['first_name'] );
+				}
+				if ( isset( $input['last_name'] ) ) {
+					$userdata['last_name'] = sanitize_text_field( $input['last_name'] );
+				}
+				if ( isset( $input['display_name'] ) ) {
+					$userdata['display_name'] = sanitize_text_field( $input['display_name'] );
+				}
+				if ( isset( $input['nickname'] ) ) {
+					$userdata['nickname'] = sanitize_text_field( $input['nickname'] );
+				}
+				if ( isset( $input['role'] ) ) {
+					$userdata['role'] = $input['role'];
+				}
+				if ( isset( $input['url'] ) ) {
+					$userdata['user_url'] = esc_url_raw( $input['url'] );
+				}
+				if ( isset( $input['description'] ) ) {
+					$userdata['description'] = sanitize_textarea_field( $input['description'] );
+				}
+
+				$result = wp_update_user( $userdata );
+
+				if ( is_wp_error( $result ) ) {
+					return array( 'success' => false, 'message' => $result->get_error_message() );
+				}
+
+				return array(
+					'success' => true,
+					'message' => 'User updated successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_users' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// USERS - Delete
+	// =========================================================================
+	wp_register_ability(
+		'users/delete',
+		array(
+			'label'               => 'Delete User',
+			'description'         => 'Deletes a user account. Can reassign content to another user.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id' ),
+				'properties'           => array(
+					'id'          => array(
+						'type'        => 'integer',
+						'description' => 'User ID to delete.',
+					),
+					'reassign_to' => array(
+						'type'        => 'integer',
+						'description' => 'User ID to reassign content to. If not provided, content will be deleted.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'User ID is required' );
+				}
+
+				$user = get_user_by( 'id', $input['id'] );
+				if ( ! $user ) {
+					return array( 'success' => false, 'message' => 'User not found' );
+				}
+
+				// Don't allow deleting yourself.
+				if ( $input['id'] === get_current_user_id() ) {
+					return array( 'success' => false, 'message' => 'Cannot delete your own account' );
+				}
+
+				require_once ABSPATH . 'wp-admin/includes/user.php';
+
+				$reassign = ! empty( $input['reassign_to'] ) ? (int) $input['reassign_to'] : null;
+				$result   = wp_delete_user( $input['id'], $reassign );
+
+				if ( ! $result ) {
+					return array( 'success' => false, 'message' => 'Failed to delete user' );
+				}
+
+				return array(
+					'success' => true,
+					'message' => 'User deleted successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'delete_users' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MEDIA - Upload
+	// =========================================================================
+	wp_register_ability(
+		'media/upload',
+		array(
+			'label'               => 'Upload Media',
+			'description'         => 'Uploads a file to the media library from a URL.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'url' ),
+				'properties'           => array(
+					'url'         => array(
+						'type'        => 'string',
+						'description' => 'URL of the file to upload.',
+					),
+					'title'       => array(
+						'type'        => 'string',
+						'description' => 'Title for the media item.',
+					),
+					'caption'     => array(
+						'type'        => 'string',
+						'description' => 'Caption for the media item.',
+					),
+					'alt_text'    => array(
+						'type'        => 'string',
+						'description' => 'Alt text for images.',
+					),
+					'description' => array(
+						'type'        => 'string',
+						'description' => 'Description for the media item.',
+					),
+					'post_id'     => array(
+						'type'        => 'integer',
+						'description' => 'Post ID to attach the media to.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'id'      => array( 'type' => 'integer' ),
+					'url'     => array( 'type' => 'string' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['url'] ) ) {
+					return array( 'success' => false, 'message' => 'URL is required' );
+				}
+
+				require_once ABSPATH . 'wp-admin/includes/media.php';
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+				require_once ABSPATH . 'wp-admin/includes/image.php';
+
+				$post_id = $input['post_id'] ?? 0;
+
+				// Download file to temp location.
+				$tmp = download_url( $input['url'] );
+				if ( is_wp_error( $tmp ) ) {
+					return array( 'success' => false, 'message' => $tmp->get_error_message() );
+				}
+
+				// Get filename from URL.
+				$filename = basename( wp_parse_url( $input['url'], PHP_URL_PATH ) );
+				if ( empty( $filename ) ) {
+					$filename = 'uploaded-file';
+				}
+
+				$file_array = array(
+					'name'     => $filename,
+					'tmp_name' => $tmp,
+				);
+
+				// Upload to media library.
+				$attachment_id = media_handle_sideload( $file_array, $post_id );
+
+				// Clean up temp file.
+				if ( file_exists( $tmp ) ) {
+					wp_delete_file( $tmp );
+				}
+
+				if ( is_wp_error( $attachment_id ) ) {
+					return array( 'success' => false, 'message' => $attachment_id->get_error_message() );
+				}
+
+				// Update attachment metadata.
+				if ( ! empty( $input['title'] ) ) {
+					wp_update_post( array(
+						'ID'         => $attachment_id,
+						'post_title' => sanitize_text_field( $input['title'] ),
+					) );
+				}
+				if ( ! empty( $input['caption'] ) ) {
+					wp_update_post( array(
+						'ID'           => $attachment_id,
+						'post_excerpt' => sanitize_text_field( $input['caption'] ),
+					) );
+				}
+				if ( ! empty( $input['description'] ) ) {
+					wp_update_post( array(
+						'ID'           => $attachment_id,
+						'post_content' => sanitize_textarea_field( $input['description'] ),
+					) );
+				}
+				if ( ! empty( $input['alt_text'] ) ) {
+					update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( $input['alt_text'] ) );
+				}
+
+				return array(
+					'success' => true,
+					'id'      => $attachment_id,
+					'url'     => wp_get_attachment_url( $attachment_id ),
+					'message' => 'Media uploaded successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'upload_files' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MEDIA - Get
+	// =========================================================================
+	wp_register_ability(
+		'media/get',
+		array(
+			'label'               => 'Get Media Item',
+			'description'         => 'Gets detailed information about a media item.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id' ),
+				'properties'           => array(
+					'id' => array(
+						'type'        => 'integer',
+						'description' => 'Media attachment ID.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'media'   => array( 'type' => 'object' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'Media ID is required' );
+				}
+
+				$attachment = get_post( $input['id'] );
+				if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
+					return array( 'success' => false, 'message' => 'Media not found' );
+				}
+
+				$metadata = wp_get_attachment_metadata( $input['id'] );
+				$sizes    = array();
+
+				if ( ! empty( $metadata['sizes'] ) ) {
+					foreach ( $metadata['sizes'] as $size => $data ) {
+						$sizes[ $size ] = array(
+							'url'    => wp_get_attachment_image_url( $input['id'], $size ),
+							'width'  => $data['width'],
+							'height' => $data['height'],
+						);
+					}
+				}
+
+				return array(
+					'success' => true,
+					'media'   => array(
+						'id'          => $attachment->ID,
+						'title'       => $attachment->post_title,
+						'caption'     => $attachment->post_excerpt,
+						'description' => $attachment->post_content,
+						'alt_text'    => get_post_meta( $input['id'], '_wp_attachment_image_alt', true ),
+						'mime_type'   => $attachment->post_mime_type,
+						'url'         => wp_get_attachment_url( $input['id'] ),
+						'date'        => $attachment->post_date,
+						'modified'    => $attachment->post_modified,
+						'author_id'   => (int) $attachment->post_author,
+						'parent_id'   => (int) $attachment->post_parent,
+						'width'       => $metadata['width'] ?? null,
+						'height'      => $metadata['height'] ?? null,
+						'file'        => $metadata['file'] ?? null,
+						'sizes'       => $sizes,
+					),
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'upload_files' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MEDIA - Update
+	// =========================================================================
+	wp_register_ability(
+		'media/update',
+		array(
+			'label'               => 'Update Media Item',
+			'description'         => 'Updates media metadata (title, caption, alt text, description).',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id' ),
+				'properties'           => array(
+					'id'          => array(
+						'type'        => 'integer',
+						'description' => 'Media attachment ID.',
+					),
+					'title'       => array(
+						'type'        => 'string',
+						'description' => 'New title.',
+					),
+					'caption'     => array(
+						'type'        => 'string',
+						'description' => 'New caption.',
+					),
+					'alt_text'    => array(
+						'type'        => 'string',
+						'description' => 'New alt text.',
+					),
+					'description' => array(
+						'type'        => 'string',
+						'description' => 'New description.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'Media ID is required' );
+				}
+
+				$attachment = get_post( $input['id'] );
+				if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
+					return array( 'success' => false, 'message' => 'Media not found' );
+				}
+
+				$post_data = array( 'ID' => $input['id'] );
+
+				if ( isset( $input['title'] ) ) {
+					$post_data['post_title'] = sanitize_text_field( $input['title'] );
+				}
+				if ( isset( $input['caption'] ) ) {
+					$post_data['post_excerpt'] = sanitize_text_field( $input['caption'] );
+				}
+				if ( isset( $input['description'] ) ) {
+					$post_data['post_content'] = sanitize_textarea_field( $input['description'] );
+				}
+
+				$result = wp_update_post( $post_data, true );
+
+				if ( is_wp_error( $result ) ) {
+					return array( 'success' => false, 'message' => $result->get_error_message() );
+				}
+
+				if ( isset( $input['alt_text'] ) ) {
+					update_post_meta( $input['id'], '_wp_attachment_image_alt', sanitize_text_field( $input['alt_text'] ) );
+				}
+
+				return array(
+					'success' => true,
+					'message' => 'Media updated successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'upload_files' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// MEDIA - Delete
+	// =========================================================================
+	wp_register_ability(
+		'media/delete',
+		array(
+			'label'               => 'Delete Media Item',
+			'description'         => 'Permanently deletes a media item and its files.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id' ),
+				'properties'           => array(
+					'id'    => array(
+						'type'        => 'integer',
+						'description' => 'Media attachment ID.',
+					),
+					'force' => array(
+						'type'        => 'boolean',
+						'default'     => true,
+						'description' => 'Force permanent deletion (default true for media).',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'Media ID is required' );
+				}
+
+				$attachment = get_post( $input['id'] );
+				if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
+					return array( 'success' => false, 'message' => 'Media not found' );
+				}
+
+				$force  = $input['force'] ?? true;
+				$result = wp_delete_attachment( $input['id'], $force );
+
+				if ( ! $result ) {
+					return array( 'success' => false, 'message' => 'Failed to delete media' );
+				}
+
+				return array(
+					'success' => true,
+					'message' => 'Media deleted successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'delete_posts' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => false,
 				),
 			),
 		)
