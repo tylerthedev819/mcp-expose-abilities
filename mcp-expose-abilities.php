@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Exposes WordPress abilities via MCP and registers content management abilities for posts, pages, and media.
- * Version: 1.4.2
+ * Version: 1.5.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -703,6 +703,540 @@ function mcp_register_content_abilities(): void {
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// PAGES - Get
+	// =========================================================================
+	wp_register_ability(
+		'content/get-page',
+		array(
+			'label'               => 'Get Page',
+			'description'         => 'Retrieves a single page by ID or slug, including full content and meta.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'id'   => array(
+						'type'        => 'integer',
+						'description' => 'Page ID to retrieve.',
+					),
+					'slug' => array(
+						'type'        => 'string',
+						'description' => 'Page slug to retrieve (used if ID not provided).',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'        => array( 'type' => 'boolean' ),
+					'id'             => array( 'type' => 'integer' ),
+					'title'          => array( 'type' => 'string' ),
+					'slug'           => array( 'type' => 'string' ),
+					'status'         => array( 'type' => 'string' ),
+					'content'        => array( 'type' => 'string' ),
+					'excerpt'        => array( 'type' => 'string' ),
+					'parent_id'      => array( 'type' => 'integer' ),
+					'menu_order'     => array( 'type' => 'integer' ),
+					'template'       => array( 'type' => 'string' ),
+					'date'           => array( 'type' => 'string' ),
+					'modified'       => array( 'type' => 'string' ),
+					'author_id'      => array( 'type' => 'integer' ),
+					'author_name'    => array( 'type' => 'string' ),
+					'featured_image' => array( 'type' => 'string' ),
+					'link'           => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+				$page  = null;
+
+				if ( ! empty( $input['id'] ) ) {
+					$page = get_post( $input['id'] );
+					if ( $page && 'page' !== $page->post_type ) {
+						$page = null;
+					}
+				} elseif ( ! empty( $input['slug'] ) ) {
+					$page = get_page_by_path( $input['slug'] );
+				}
+
+				if ( ! $page ) {
+					return array( 'success' => false, 'message' => 'Page not found' );
+				}
+
+				$author    = get_user_by( 'id', $page->post_author );
+				$thumbnail = get_the_post_thumbnail_url( $page->ID, 'full' );
+				$template  = get_page_template_slug( $page->ID );
+
+				return array(
+					'success'        => true,
+					'id'             => $page->ID,
+					'title'          => $page->post_title,
+					'slug'           => $page->post_name,
+					'status'         => $page->post_status,
+					'content'        => $page->post_content,
+					'excerpt'        => $page->post_excerpt,
+					'parent_id'      => (int) $page->post_parent,
+					'menu_order'     => (int) $page->menu_order,
+					'template'       => $template ?: 'default',
+					'date'           => $page->post_date,
+					'modified'       => $page->post_modified,
+					'author_id'      => (int) $page->post_author,
+					'author_name'    => $author ? $author->display_name : '',
+					'featured_image' => $thumbnail ?: '',
+					'link'           => get_permalink( $page->ID ),
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_pages' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// PAGES - Create
+	// =========================================================================
+	wp_register_ability(
+		'content/create-page',
+		array(
+			'label'               => 'Create Page',
+			'description'         => 'Creates a new page with specified title, content, status, and parent.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'title' ),
+				'properties'           => array(
+					'title'      => array(
+						'type'        => 'string',
+						'description' => 'Page title.',
+					),
+					'content'    => array(
+						'type'        => 'string',
+						'description' => 'Page content (supports Gutenberg blocks).',
+					),
+					'excerpt'    => array(
+						'type'        => 'string',
+						'description' => 'Page excerpt.',
+					),
+					'status'     => array(
+						'type'        => 'string',
+						'enum'        => array( 'publish', 'draft', 'pending', 'private' ),
+						'default'     => 'draft',
+						'description' => 'Page status.',
+					),
+					'slug'       => array(
+						'type'        => 'string',
+						'description' => 'Page slug (auto-generated from title if not provided).',
+					),
+					'parent'     => array(
+						'type'        => 'integer',
+						'description' => 'Parent page ID. Use 0 for top-level page.',
+					),
+					'menu_order' => array(
+						'type'        => 'integer',
+						'description' => 'Menu order for page sorting.',
+					),
+					'template'   => array(
+						'type'        => 'string',
+						'description' => 'Page template slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'id'      => array( 'type' => 'integer' ),
+					'link'    => array( 'type' => 'string' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['title'] ) ) {
+					return array( 'success' => false, 'message' => 'Title is required' );
+				}
+
+				$page_data = array(
+					'post_type'    => 'page',
+					'post_title'   => sanitize_text_field( $input['title'] ),
+					'post_content' => $input['content'] ?? '',
+					'post_excerpt' => $input['excerpt'] ?? '',
+					'post_status'  => $input['status'] ?? 'draft',
+				);
+
+				if ( ! empty( $input['slug'] ) ) {
+					$page_data['post_name'] = sanitize_title( $input['slug'] );
+				}
+
+				if ( isset( $input['parent'] ) ) {
+					$page_data['post_parent'] = (int) $input['parent'];
+				}
+
+				if ( isset( $input['menu_order'] ) ) {
+					$page_data['menu_order'] = (int) $input['menu_order'];
+				}
+
+				$page_id = wp_insert_post( $page_data, true );
+
+				if ( is_wp_error( $page_id ) ) {
+					return array( 'success' => false, 'message' => $page_id->get_error_message() );
+				}
+
+				if ( ! empty( $input['template'] ) ) {
+					update_post_meta( $page_id, '_wp_page_template', $input['template'] );
+				}
+
+				return array(
+					'success' => true,
+					'id'      => $page_id,
+					'link'    => get_permalink( $page_id ),
+					'message' => 'Page created successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'publish_pages' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// PAGES - Update
+	// =========================================================================
+	wp_register_ability(
+		'content/update-page',
+		array(
+			'label'               => 'Update Page',
+			'description'         => 'Updates an existing page. Only provided fields will be updated.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id' ),
+				'properties'           => array(
+					'id'         => array(
+						'type'        => 'integer',
+						'description' => 'Page ID to update.',
+					),
+					'title'      => array(
+						'type'        => 'string',
+						'description' => 'New page title.',
+					),
+					'content'    => array(
+						'type'        => 'string',
+						'description' => 'New page content.',
+					),
+					'excerpt'    => array(
+						'type'        => 'string',
+						'description' => 'New page excerpt.',
+					),
+					'status'     => array(
+						'type'        => 'string',
+						'enum'        => array( 'publish', 'draft', 'pending', 'private' ),
+						'description' => 'New page status.',
+					),
+					'slug'       => array(
+						'type'        => 'string',
+						'description' => 'New page slug.',
+					),
+					'parent'     => array(
+						'type'        => 'integer',
+						'description' => 'New parent page ID.',
+					),
+					'menu_order' => array(
+						'type'        => 'integer',
+						'description' => 'New menu order.',
+					),
+					'template'   => array(
+						'type'        => 'string',
+						'description' => 'New page template slug.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'id'      => array( 'type' => 'integer' ),
+					'link'    => array( 'type' => 'string' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'Page ID is required' );
+				}
+
+				$page = get_post( $input['id'] );
+				if ( ! $page || 'page' !== $page->post_type ) {
+					return array( 'success' => false, 'message' => 'Page not found' );
+				}
+
+				$page_data = array( 'ID' => $input['id'] );
+
+				if ( isset( $input['title'] ) ) {
+					$page_data['post_title'] = sanitize_text_field( $input['title'] );
+				}
+				if ( isset( $input['content'] ) ) {
+					$page_data['post_content'] = $input['content'];
+				}
+				if ( isset( $input['excerpt'] ) ) {
+					$page_data['post_excerpt'] = $input['excerpt'];
+				}
+				if ( isset( $input['status'] ) ) {
+					$page_data['post_status'] = $input['status'];
+				}
+				if ( isset( $input['slug'] ) ) {
+					$page_data['post_name'] = sanitize_title( $input['slug'] );
+				}
+				if ( isset( $input['parent'] ) ) {
+					$page_data['post_parent'] = (int) $input['parent'];
+				}
+				if ( isset( $input['menu_order'] ) ) {
+					$page_data['menu_order'] = (int) $input['menu_order'];
+				}
+
+				$result = wp_update_post( $page_data, true );
+
+				if ( is_wp_error( $result ) ) {
+					return array( 'success' => false, 'message' => $result->get_error_message() );
+				}
+
+				if ( isset( $input['template'] ) ) {
+					update_post_meta( $input['id'], '_wp_page_template', $input['template'] );
+				}
+
+				return array(
+					'success' => true,
+					'id'      => $input['id'],
+					'link'    => get_permalink( $input['id'] ),
+					'message' => 'Page updated successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_pages' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// PAGES - Delete
+	// =========================================================================
+	wp_register_ability(
+		'content/delete-page',
+		array(
+			'label'               => 'Delete Page',
+			'description'         => 'Deletes a page by ID. Can move to trash or permanently delete.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id' ),
+				'properties'           => array(
+					'id'    => array(
+						'type'        => 'integer',
+						'description' => 'Page ID to delete.',
+					),
+					'force' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'If true, permanently deletes. If false, moves to trash.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'Page ID is required' );
+				}
+
+				$page = get_post( $input['id'] );
+				if ( ! $page || 'page' !== $page->post_type ) {
+					return array( 'success' => false, 'message' => 'Page not found' );
+				}
+
+				$force  = ! empty( $input['force'] );
+				$result = wp_delete_post( $input['id'], $force );
+
+				if ( ! $result ) {
+					return array( 'success' => false, 'message' => 'Failed to delete page' );
+				}
+
+				$message = $force ? 'Page permanently deleted' : 'Page moved to trash';
+				return array( 'success' => true, 'message' => $message );
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'delete_pages' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => true,
+					'idempotent'  => false,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// PAGES - Patch
+	// =========================================================================
+	wp_register_ability(
+		'content/patch-page',
+		array(
+			'label'               => 'Patch Page Content',
+			'description'         => 'Performs find-and-replace operations on page content. Supports plain text or regex patterns.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id', 'find', 'replace' ),
+				'properties'           => array(
+					'id'      => array(
+						'type'        => 'integer',
+						'description' => 'Page ID to patch.',
+					),
+					'find'    => array(
+						'type'        => 'string',
+						'description' => 'String or regex pattern to find.',
+					),
+					'replace' => array(
+						'type'        => 'string',
+						'description' => 'Replacement string. Supports backreferences ($1, $2, etc.) when using regex.',
+					),
+					'regex'   => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'If true, treat "find" as a regex pattern.',
+					),
+					'limit'   => array(
+						'type'        => 'integer',
+						'default'     => -1,
+						'description' => 'Maximum replacements (-1 for all). Only applies to non-regex mode.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'      => array( 'type' => 'boolean' ),
+					'id'           => array( 'type' => 'integer' ),
+					'replacements' => array( 'type' => 'integer' ),
+					'message'      => array( 'type' => 'string' ),
+					'link'         => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'Page ID is required' );
+				}
+				if ( ! isset( $input['find'] ) || '' === $input['find'] ) {
+					return array( 'success' => false, 'message' => 'Find string is required' );
+				}
+				if ( ! isset( $input['replace'] ) ) {
+					return array( 'success' => false, 'message' => 'Replace string is required' );
+				}
+
+				$page = get_post( $input['id'] );
+				if ( ! $page || 'page' !== $page->post_type ) {
+					return array( 'success' => false, 'message' => 'Page not found' );
+				}
+
+				$content   = $page->post_content;
+				$find      = $input['find'];
+				$replace   = $input['replace'];
+				$use_regex = ! empty( $input['regex'] );
+				$limit     = isset( $input['limit'] ) ? (int) $input['limit'] : -1;
+				$count     = 0;
+
+				if ( $use_regex ) {
+					$new_content = preg_replace( $find, $replace, $content, -1, $count );
+					if ( null === $new_content ) {
+						return array( 'success' => false, 'message' => 'Invalid regex pattern' );
+					}
+				} else {
+					if ( -1 === $limit ) {
+						$new_content = str_replace( $find, $replace, $content, $count );
+					} else {
+						$new_content = preg_replace( '/' . preg_quote( $find, '/' ) . '/', $replace, $content, $limit, $count );
+					}
+				}
+
+				if ( 0 === $count ) {
+					return array(
+						'success'      => true,
+						'id'           => $input['id'],
+						'replacements' => 0,
+						'message'      => 'No matches found - content unchanged',
+						'link'         => get_permalink( $input['id'] ),
+					);
+				}
+
+				$result = wp_update_post( array(
+					'ID'           => $input['id'],
+					'post_content' => $new_content,
+				), true );
+
+				if ( is_wp_error( $result ) ) {
+					return array( 'success' => false, 'message' => $result->get_error_message() );
+				}
+
+				return array(
+					'success'      => true,
+					'id'           => $input['id'],
+					'replacements' => $count,
+					'message'      => "Successfully replaced {$count} occurrence(s)",
+					'link'         => get_permalink( $input['id'] ),
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_pages' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
 					'destructive' => false,
 					'idempotent'  => true,
 				),
