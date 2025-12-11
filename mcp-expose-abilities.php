@@ -4549,5 +4549,89 @@ function mcp_register_content_abilities(): void {
 			),
 		)
 	);
+
+	// =========================================================================
+	// SYSTEM - Debug Log
+	// =========================================================================
+	wp_register_ability(
+		'system/debug-log',
+		array(
+			'label'               => 'Read Debug Log',
+			'description'         => 'Reads the WordPress debug.log file. Returns the last N lines, optionally filtered by a search pattern.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'lines'  => array(
+						'type'        => 'integer',
+						'default'     => 50,
+						'minimum'     => 1,
+						'maximum'     => 500,
+						'description' => 'Number of lines to return from the end of the log.',
+					),
+					'filter' => array(
+						'type'        => 'string',
+						'description' => 'Optional filter string. Only lines containing this text will be returned.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'lines'   => array( 'type' => 'array', 'items' => array( 'type' => 'string' ) ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				$log_file = WP_CONTENT_DIR . '/debug.log';
+
+				if ( ! file_exists( $log_file ) ) {
+					return array( 'success' => false, 'message' => 'Debug log file not found', 'lines' => array() );
+				}
+
+				if ( ! is_readable( $log_file ) ) {
+					return array( 'success' => false, 'message' => 'Debug log file not readable', 'lines' => array() );
+				}
+
+				$num_lines = isset( $input['lines'] ) ? min( max( 1, (int) $input['lines'] ), 500 ) : 50;
+				$filter    = isset( $input['filter'] ) ? $input['filter'] : '';
+
+				// Read file from end
+				$file_content = file_get_contents( $log_file );
+				$all_lines    = explode( "\n", $file_content );
+				$all_lines    = array_filter( $all_lines, function( $line ) { return trim( $line ) !== ''; } );
+
+				// Apply filter if specified
+				if ( ! empty( $filter ) ) {
+					$all_lines = array_filter( $all_lines, function( $line ) use ( $filter ) {
+						return stripos( $line, $filter ) !== false;
+					} );
+				}
+
+				// Get last N lines
+				$result_lines = array_slice( $all_lines, -$num_lines );
+
+				return array(
+					'success' => true,
+					'lines'   => array_values( $result_lines ),
+					'message' => sprintf( 'Returned %d lines', count( $result_lines ) ),
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'manage_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
 }
 add_action( 'wp_abilities_api_init', 'mcp_register_content_abilities' );
