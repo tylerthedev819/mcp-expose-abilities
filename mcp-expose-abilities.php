@@ -4551,6 +4551,66 @@ function mcp_register_content_abilities(): void {
 	);
 
 	// =========================================================================
+	// SYSTEM - Get Transient
+	// =========================================================================
+	wp_register_ability(
+		'system/get-transient',
+		array(
+			'label'               => 'Get Transient',
+			'description'         => 'Retrieves a WordPress transient value by name.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'name' => array(
+						'type'        => 'string',
+						'description' => 'The transient name to retrieve.',
+					),
+				),
+				'required'             => array( 'name' ),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'value'   => array(),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['name'] ) ) {
+					return array( 'success' => false, 'message' => 'Transient name is required', 'value' => null );
+				}
+
+				$value = get_transient( $input['name'] );
+
+				if ( false === $value ) {
+					return array( 'success' => false, 'message' => 'Transient not found or expired', 'value' => null );
+				}
+
+				return array(
+					'success' => true,
+					'value'   => $value,
+					'message' => 'Transient retrieved successfully',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'manage_options' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => true,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
 	// SYSTEM - Debug Log
 	// =========================================================================
 	wp_register_ability(
