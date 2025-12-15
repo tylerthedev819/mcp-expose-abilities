@@ -1,6 +1,6 @@
 # MCP Expose Abilities
 
-**Let AI assistants edit your WordPress site.** 54 abilities for content, menus, users, media, Elementor, and more.
+**Let AI assistants edit your WordPress site.** 55 abilities for content, menus, users, media, Elementor, system, and more.
 
 [![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-expose-abilities)](https://github.com/bjornfix/mcp-expose-abilities/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
@@ -27,7 +27,7 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 3. Upload via WordPress Admin → Plugins → Add New → Upload Plugin
 4. Activate the plugin
 
-## All 54 Abilities
+## All 55 Abilities
 
 ### Content Management (14)
 
@@ -128,6 +128,12 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 | `core/get-user-info` | Current user profile |
 | `core/get-environment-info` | PHP/DB/runtime info |
 
+### System (1)
+
+| Ability | Description |
+|---------|-------------|
+| `system/toggle-debug` | Toggle WP_DEBUG, WP_DEBUG_LOG, WP_DEBUG_DISPLAY in wp-config.php |
+
 ## Usage with Claude Code
 
 ### 1. Create Application Password
@@ -219,6 +225,10 @@ Three-plugin stack:
 PRs welcome! If you add useful abilities, share them.
 
 ## Changelog
+
+### 2.0.1
+- Added: `system/toggle-debug` ability to toggle WP_DEBUG settings via MCP
+- Total: 55 abilities
 
 ### 2.0.0
 - Added: Menu abilities (list, get-items, create, add-item, update-item, delete-item, assign-location)
