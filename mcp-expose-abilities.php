@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Exposes WordPress abilities via MCP and registers content management abilities for posts, pages, and media.
- * Version: 2.0.1
+ * Version: 2.0.2
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -1374,6 +1374,98 @@ function mcp_register_content_abilities(): void {
 					'readonly'    => true,
 					'destructive' => false,
 					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// TAGS - Create
+	// =========================================================================
+	wp_register_ability(
+		'content/create-tag',
+		array(
+			'label'               => 'Create Tag',
+			'description'         => 'Creates a new post tag. Returns the tag ID, name, and slug.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'name' ),
+				'properties'           => array(
+					'name'        => array(
+						'type'        => 'string',
+						'description' => 'The tag name.',
+					),
+					'slug'        => array(
+						'type'        => 'string',
+						'description' => 'The tag slug (optional, auto-generated from name if not provided).',
+					),
+					'description' => array(
+						'type'        => 'string',
+						'description' => 'The tag description (optional).',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'id'      => array( 'type' => 'integer' ),
+					'name'    => array( 'type' => 'string' ),
+					'slug'    => array( 'type' => 'string' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input ): array {
+				$args = array();
+
+				if ( ! empty( $input['slug'] ) ) {
+					$args['slug'] = $input['slug'];
+				}
+
+				if ( ! empty( $input['description'] ) ) {
+					$args['description'] = $input['description'];
+				}
+
+				$result = wp_insert_term( $input['name'], 'post_tag', $args );
+
+				if ( is_wp_error( $result ) ) {
+					// Check if tag already exists
+					if ( $result->get_error_code() === 'term_exists' ) {
+						$existing_term = get_term( $result->get_error_data(), 'post_tag' );
+						return array(
+							'success' => true,
+							'id'      => $existing_term->term_id,
+							'name'    => $existing_term->name,
+							'slug'    => $existing_term->slug,
+							'message' => 'Tag already exists.',
+						);
+					}
+					return array(
+						'success' => false,
+						'message' => $result->get_error_message(),
+					);
+				}
+
+				$term = get_term( $result['term_id'], 'post_tag' );
+
+				return array(
+					'success' => true,
+					'id'      => $term->term_id,
+					'name'    => $term->name,
+					'slug'    => $term->slug,
+					'message' => 'Tag created successfully.',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'manage_categories' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
 				),
 			),
 		)

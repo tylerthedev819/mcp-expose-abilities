@@ -1,6 +1,6 @@
 # MCP Expose Abilities
 
-**Let AI assistants edit your WordPress site.** 55 abilities for content, menus, users, media, Elementor, system, and more.
+**Let AI assistants edit your WordPress site.** 56 abilities for content, menus, users, media, Elementor, system, and more.
 
 [![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-expose-abilities)](https://github.com/bjornfix/mcp-expose-abilities/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
@@ -27,9 +27,9 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 3. Upload via WordPress Admin → Plugins → Add New → Upload Plugin
 4. Activate the plugin
 
-## All 55 Abilities
+## All 56 Abilities
 
-### Content Management (14)
+### Content Management (15)
 
 | Ability | Description |
 |---------|-------------|
@@ -47,6 +47,7 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 | `content/patch-page` | Find/replace in page content |
 | `content/list-categories` | List all categories |
 | `content/list-tags` | List all tags |
+| `content/create-tag` | Create new tag |
 | `content/search` | Search across posts, pages, media |
 
 ### Menu Management (7)
@@ -225,6 +226,10 @@ Three-plugin stack:
 PRs welcome! If you add useful abilities, share them.
 
 ## Changelog
+
+### 2.0.2
+- Added: `content/create-tag` ability to create post tags via MCP
+- Total: 56 abilities
 
 ### 2.0.1
 - Added: `system/toggle-debug` ability to toggle WP_DEBUG settings via MCP
