@@ -2440,6 +2440,139 @@ function mcp_register_content_abilities(): void {
 	);
 
 	// =========================================================================
+	// ELEMENTOR - Update Element (targeted container/widget replacement)
+	// =========================================================================
+	wp_register_ability(
+		'elementor/update-element',
+		array(
+			'label'               => 'Update Elementor Element',
+			'description'         => 'Replaces a specific element (container or widget) by ID within the Elementor page structure. Useful for targeted updates without re-uploading the entire page.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'id', 'element_id', 'element_data' ),
+				'properties'           => array(
+					'id'           => array(
+						'type'        => 'integer',
+						'description' => 'Post/Page ID containing the element.',
+					),
+					'element_id'   => array(
+						'type'        => 'string',
+						'description' => 'The ID of the element to replace (e.g., "col1", "hero_section").',
+					),
+					'element_data' => array(
+						'type'        => 'object',
+						'description' => 'The new element data to replace it with. Must include "id", "elType", and other required Elementor fields.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'    => array( 'type' => 'boolean' ),
+					'id'         => array( 'type' => 'integer' ),
+					'element_id' => array( 'type' => 'string' ),
+					'message'    => array( 'type' => 'string' ),
+					'link'       => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['id'] ) ) {
+					return array( 'success' => false, 'message' => 'Post/Page ID is required' );
+				}
+				if ( empty( $input['element_id'] ) ) {
+					return array( 'success' => false, 'message' => 'Element ID is required' );
+				}
+				if ( ! isset( $input['element_data'] ) || ! is_array( $input['element_data'] ) ) {
+					return array( 'success' => false, 'message' => 'Element data object is required' );
+				}
+
+				$post = get_post( $input['id'] );
+				if ( ! $post ) {
+					return array( 'success' => false, 'message' => 'Post not found' );
+				}
+
+				$elementor_data = get_post_meta( $input['id'], '_elementor_data', true );
+				if ( empty( $elementor_data ) ) {
+					return array( 'success' => false, 'message' => 'No Elementor data found for this post' );
+				}
+
+				$data = json_decode( $elementor_data, true );
+				if ( null === $data ) {
+					return array( 'success' => false, 'message' => 'Failed to parse existing Elementor data' );
+				}
+
+				// Recursive function to find and replace element by ID.
+				$found = false;
+				$replace_element = function ( &$elements, $target_id, $new_element ) use ( &$replace_element, &$found ) {
+					foreach ( $elements as $index => &$element ) {
+						if ( isset( $element['id'] ) && $element['id'] === $target_id ) {
+							$elements[ $index ] = $new_element;
+							$found = true;
+							return true;
+						}
+						if ( ! empty( $element['elements'] ) && is_array( $element['elements'] ) ) {
+							if ( $replace_element( $element['elements'], $target_id, $new_element ) ) {
+								return true;
+							}
+						}
+					}
+					return false;
+				};
+
+				$replace_element( $data, $input['element_id'], $input['element_data'] );
+
+				if ( ! $found ) {
+					return array(
+						'success'    => false,
+						'id'         => $input['id'],
+						'element_id' => $input['element_id'],
+						'message'    => 'Element with ID "' . $input['element_id'] . '" not found in page structure',
+					);
+				}
+
+				// Encode and save.
+				$json_data = wp_json_encode( $data );
+				if ( false === $json_data ) {
+					return array( 'success' => false, 'message' => 'Failed to encode updated data to JSON' );
+				}
+
+				update_post_meta( $input['id'], '_elementor_data', wp_slash( $json_data ) );
+
+				// Clear Elementor CSS cache.
+				delete_post_meta( $input['id'], '_elementor_css' );
+
+				// Update post modified time.
+				wp_update_post( array(
+					'ID'            => $input['id'],
+					'post_modified' => current_time( 'mysql' ),
+				) );
+
+				return array(
+					'success'    => true,
+					'id'         => $input['id'],
+					'element_id' => $input['element_id'],
+					'message'    => 'Element "' . $input['element_id'] . '" updated successfully',
+					'link'       => get_permalink( $input['id'] ),
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'edit_posts' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
 	// ELEMENTOR - List Templates
 	// =========================================================================
 	wp_register_ability(
