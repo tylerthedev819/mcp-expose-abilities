@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Exposes WordPress abilities via MCP and registers content management abilities for posts, pages, and media.
- * Version: 2.3.1
+ * Version: 2.4.0
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -5472,17 +5472,10 @@ function mcp_register_content_abilities(): void {
 	// =========================================================================
 	// FILESYSTEM ABILITIES
 	// =========================================================================
-	// SECURITY: Filesystem abilities are DISABLED by default.
-	// To enable, add this to wp-config.php:
-	//   define( 'MCP_ENABLE_FILESYSTEM_ABILITIES', true );
-	//
-	// WARNING: These abilities can read, write, and delete files on your server.
-	// Only enable on sites where you trust all MCP clients with admin access.
+	// These abilities provide FTP-like file operations via MCP.
+	// All operations are restricted to the WordPress installation directory.
+	// Core files (wp-includes/, wp-admin/) cannot be modified.
 	// =========================================================================
-	if ( ! defined( 'MCP_ENABLE_FILESYSTEM_ABILITIES' ) || ! MCP_ENABLE_FILESYSTEM_ABILITIES ) {
-		// Filesystem abilities disabled - skip registration.
-		return;
-	}
 
 	// =========================================================================
 	// FILESYSTEM - Read File
@@ -5491,7 +5484,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/read-file',
 		array(
 			'label'               => 'Read File',
-			'description'         => 'Reads the contents of a file. Path can be absolute or relative to WordPress root. For security, only files within the WordPress installation directory are accessible.',
+			'description'         => '[FILESYSTEM] Reads file contents. Restricted to WordPress directory. Explain to user what file and why before using.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -5601,7 +5594,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/write-file',
 		array(
 			'label'               => 'Write File',
-			'description'         => 'Creates or overwrites a file with the specified content. Use with caution. Cannot modify wp-includes or wp-admin core files.',
+			'description'         => '[FILESYSTEM] Creates/overwrites file. DESTRUCTIVE - explain what file and content before using. Cannot modify core files.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -5737,7 +5730,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/append-file',
 		array(
 			'label'               => 'Append to File',
-			'description'         => 'Appends content to an existing file. Useful for adding rules to .htaccess without overwriting existing content.',
+			'description'         => '[FILESYSTEM] Appends to file (e.g., .htaccess rules). Explain what you are adding before using.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -5855,7 +5848,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/list-directory',
 		array(
 			'label'               => 'List Directory',
-			'description'         => 'Lists files and subdirectories in a directory. Returns file names, sizes, types, and modification dates.',
+			'description'         => '[FILESYSTEM] Lists directory contents. Safe read-only operation.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -6000,7 +5993,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/delete-file',
 		array(
 			'label'               => 'Delete File',
-			'description'         => 'Deletes a file. Cannot delete directories or WordPress core files.',
+			'description'         => '[FILESYSTEM] Deletes file. DESTRUCTIVE - explain what and why before using. Creates backup by default.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -6137,7 +6130,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/file-info',
 		array(
 			'label'               => 'Get File Info',
-			'description'         => 'Returns detailed information about a file or directory including size, permissions, owner, and timestamps.',
+			'description'         => '[FILESYSTEM] Gets file/directory metadata. Safe read-only operation.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -6240,7 +6233,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/create-directory',
 		array(
 			'label'               => 'Create Directory',
-			'description'         => 'Creates a new directory.',
+			'description'         => '[FILESYSTEM] Creates directory. Explain purpose before using.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -6351,7 +6344,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/copy-file',
 		array(
 			'label'               => 'Copy File',
-			'description'         => 'Copies a file to a new location.',
+			'description'         => '[FILESYSTEM] Copies file. Explain source, destination, and purpose before using.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
@@ -6467,7 +6460,7 @@ function mcp_register_content_abilities(): void {
 		'filesystem/move-file',
 		array(
 			'label'               => 'Move/Rename File',
-			'description'         => 'Moves or renames a file.',
+			'description'         => '[FILESYSTEM] Moves/renames file. DESTRUCTIVE - explain source, destination, and purpose before using.',
 			'category'            => 'system',
 			'input_schema'        => array(
 				'type'                 => 'object',
