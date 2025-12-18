@@ -5693,6 +5693,13 @@ function mcp_register_content_abilities(): void {
 				'/\$[a-zA-Z_]\w*\s*\(\s*\$_(GET|POST|REQUEST|COOKIE)/i',      // Variable function with superglobal.
 				'/[\'"][a-z]{2,5}[\'"]\s*\.\s*[\'"][a-z]{2,5}[\'"]/i',        // Concatenated short strings (obfuscation).
 				'/\$\w+\s*=\s*[\'"][a-z_]+[\'"]\s*;\s*\$\w+\s*\(/i',          // Variable assignment then call.
+				'/\b(call_user_func|call_user_func_array)\s*\(/i',            // Callback execution.
+				'/\b(array_map|array_filter|array_walk|array_reduce)\s*\(/i', // Array callbacks.
+				'/\b(usort|uasort|uksort|preg_replace_callback)\s*\(/i',      // Sort/callback functions.
+				'/`[^`]+`/',                                                   // Backtick execution.
+				'/\b(include|require|include_once|require_once)\s*\(\s*\$/i', // LFI via variable.
+				'/\$\{\s*[\'"][^"\']+[\'"]\s*\}/',                            // Variable variables ${}.
+				'/\^/',                                                        // XOR obfuscation.
 			);
 
 			foreach ( $dangerous_patterns as $pattern ) {
