@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Exposes WordPress abilities via MCP and registers content management abilities for posts, pages, and media.
- * Version: 2.5.2
+ * Version: 2.5.3
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -5628,11 +5628,18 @@ function mcp_register_content_abilities(): void {
 		$extension = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
 		$dir       = dirname( $path );
 
+		// Allow specific dotfiles that are legitimate config files.
+		$allowed_dotfiles   = array( '.htaccess', '.htpasswd', '.user.ini' );
+		$is_allowed_dotfile = in_array( $filename, $allowed_dotfiles, true );
+
 		// Use WordPress sanitize_file_name to check for suspicious characters.
-		$sanitized = sanitize_file_name( $filename );
-		if ( $sanitized !== $filename ) {
-			// File has characters that WordPress would sanitize out.
-			return 'Filename contains invalid characters. WordPress sanitized version: ' . $sanitized;
+		// Skip this check for allowed dotfiles since sanitize_file_name strips leading dots.
+		if ( ! $is_allowed_dotfile ) {
+			$sanitized = sanitize_file_name( $filename );
+			if ( $sanitized !== $filename ) {
+				// File has characters that WordPress would sanitize out.
+				return 'Filename contains invalid characters. WordPress sanitized version: ' . $sanitized;
+			}
 		}
 
 		// Dangerous extensions that should never be written.
