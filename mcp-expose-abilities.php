@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Exposes WordPress abilities via MCP and registers content management abilities for posts, pages, and media.
- * Version: 2.2.10
+ * Version: 2.2.11
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -5742,6 +5742,10 @@ function mcp_register_content_abilities(): void {
 				'<%',                           // ASP-style tags (deprecated but dangerous).
 				'<script language="php">',      // Alternative PHP syntax.
 				"<script language='php'>",      // Alternative syntax with single quotes.
+				'+ADw-',                        // UTF-7 encoded < character.
+				"+ACE-",                        // UTF-7 encoded ! (for <!).
+				"<\x00?\x00",                   // UTF-16LE encoded <?.
+				"\x00<\x00?",                   // UTF-16BE encoded <?.
 			);
 
 			foreach ( $php_signatures as $sig ) {
