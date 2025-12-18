@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Exposes WordPress abilities via MCP and registers content management abilities for posts, pages, and media.
- * Version: 2.5.0
+ * Version: 2.5.1
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -5475,7 +5475,188 @@ function mcp_register_content_abilities(): void {
 	// These abilities provide FTP-like file operations via MCP.
 	// All operations are restricted to the WordPress installation directory.
 	// Core files (wp-includes/, wp-admin/) cannot be modified.
+	// All destructive operations are logged to wp-content/mcp-filesystem.log
 	// =========================================================================
+
+	/**
+	 * Get the MCP backup directory path and ensure it exists.
+	 *
+	 * @return string The backup directory path.
+	 */
+	$mcp_get_backup_dir = function (): string {
+		$backup_dir = WP_CONTENT_DIR . '/mcp-backups/' . gmdate( 'Y-m-d' );
+		if ( ! is_dir( $backup_dir ) ) {
+			wp_mkdir_p( $backup_dir );
+		}
+		return $backup_dir;
+	};
+
+	/**
+	 * Create a backup of a file in the centralized backup directory.
+	 *
+	 * @param string $source_path The file to backup.
+	 * @return string|false The backup path on success, false on failure.
+	 */
+	$mcp_create_backup = function ( string $source_path ) use ( $mcp_get_backup_dir ): string|false {
+		if ( ! file_exists( $source_path ) ) {
+			return false;
+		}
+
+		$backup_dir  = $mcp_get_backup_dir();
+		$filename    = basename( $source_path );
+		$backup_name = $filename . '.bak.' . gmdate( 'His' );
+		$backup_path = $backup_dir . '/' . $backup_name;
+
+		// Handle duplicate names within same second.
+		$counter = 1;
+		while ( file_exists( $backup_path ) ) {
+			$backup_path = $backup_dir . '/' . $filename . '.bak.' . gmdate( 'His' ) . '.' . $counter;
+			$counter++;
+		}
+
+		if ( copy( $source_path, $backup_path ) ) {
+			return $backup_path;
+		}
+
+		return false;
+	};
+
+	/**
+	 * Clean up old backup folders (older than 7 days).
+	 */
+	$mcp_cleanup_old_backups = function (): void {
+		$backup_base = WP_CONTENT_DIR . '/mcp-backups';
+		if ( ! is_dir( $backup_base ) ) {
+			return;
+		}
+
+		$cutoff = strtotime( '-7 days' );
+		$dirs   = glob( $backup_base . '/20*-*-*', GLOB_ONLYDIR );
+
+		foreach ( $dirs as $dir ) {
+			$date_str = basename( $dir );
+			$date_ts  = strtotime( $date_str );
+			if ( $date_ts && $date_ts < $cutoff ) {
+				// Delete all files in the directory.
+				$files = glob( $dir . '/*' );
+				foreach ( $files as $file ) {
+					if ( is_file( $file ) ) {
+						unlink( $file );
+					}
+				}
+				rmdir( $dir );
+			}
+		}
+	};
+
+	/**
+	 * Log filesystem operations to wp-content/mcp-filesystem.log
+	 * This log survives context compaction and enables recovery.
+	 *
+	 * @param string $operation The operation type (WRITE, DELETE, MOVE, COPY, APPEND).
+	 * @param string $path      The file path being operated on.
+	 * @param array  $details   Additional details (backup path, size, context, etc.).
+	 */
+	$mcp_log_filesystem_operation = function ( string $operation, string $path, array $details = array() ) use ( $mcp_cleanup_old_backups ): void {
+		$log_file  = WP_CONTENT_DIR . '/mcp-filesystem.log';
+		$timestamp = gmdate( 'Y-m-d H:i:s' );
+
+		$entry = "[{$timestamp}] {$operation}\n";
+		$entry .= "  File: {$path}\n";
+
+		if ( ! empty( $details['backup'] ) ) {
+			$entry .= "  Backup: {$details['backup']}\n";
+		}
+		if ( ! empty( $details['size_before'] ) || ! empty( $details['size_after'] ) ) {
+			$before = $details['size_before'] ?? '?';
+			$after  = $details['size_after'] ?? '?';
+			$entry .= "  Size: {$before} -> {$after} bytes\n";
+		}
+		if ( ! empty( $details['destination'] ) ) {
+			$entry .= "  Destination: {$details['destination']}\n";
+		}
+		if ( ! empty( $details['context'] ) ) {
+			$entry .= "  Context: {$details['context']}\n";
+		}
+		$entry .= "\n";
+
+		// Append to log file (create if doesn't exist).
+		file_put_contents( $log_file, $entry, FILE_APPEND | LOCK_EX );
+
+		// Cleanup old backups occasionally (1 in 10 chance to avoid overhead).
+		if ( wp_rand( 1, 10 ) === 1 ) {
+			$mcp_cleanup_old_backups();
+		}
+	};
+
+	// =========================================================================
+	// FILESYSTEM - Get Changelog
+	// =========================================================================
+	wp_register_ability(
+		'filesystem/get-changelog',
+		array(
+			'label'               => 'Get Filesystem Changelog',
+			'description'         => '[FILESYSTEM] Returns recent filesystem operations log. Use this after context loss to understand what was changed.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'lines' => array(
+						'type'        => 'integer',
+						'description' => 'Number of lines to return (default 100, max 500).',
+					),
+				),
+				'required'             => array(),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'log'     => array( 'type' => 'string' ),
+					'path'    => array( 'type' => 'string' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( array $input ): array {
+				$log_file = WP_CONTENT_DIR . '/mcp-filesystem.log';
+				$lines    = min( max( (int) ( $input['lines'] ?? 100 ), 1 ), 500 );
+
+				if ( ! file_exists( $log_file ) ) {
+					return array(
+						'success' => true,
+						'log'     => '',
+						'path'    => $log_file,
+						'message' => 'No filesystem operations have been logged yet.',
+					);
+				}
+
+				// Read last N lines efficiently.
+				$content = file_get_contents( $log_file );
+				if ( false === $content ) {
+					return array(
+						'success' => false,
+						'message' => 'Failed to read changelog.',
+					);
+				}
+
+				$all_lines   = explode( "\n", $content );
+				$total_lines = count( $all_lines );
+				$start       = max( 0, $total_lines - $lines );
+				$last_lines  = array_slice( $all_lines, $start );
+
+				return array(
+					'success' => true,
+					'log'     => implode( "\n", $last_lines ),
+					'path'    => $log_file,
+					'message' => "Showing last {$lines} lines of {$total_lines} total.",
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'manage_options' );
+			},
+		)
+	);
 
 	// =========================================================================
 	// FILESYSTEM - Read File
@@ -5612,6 +5793,10 @@ function mcp_register_content_abilities(): void {
 						'default'     => true,
 						'description' => 'Create a backup before overwriting (default: true).',
 					),
+					'context' => array(
+						'type'        => 'string',
+						'description' => 'Brief description of why this change is being made (logged for recovery).',
+					),
 				),
 				'required'             => array( 'path', 'content' ),
 				'additionalProperties' => false,
@@ -5626,10 +5811,11 @@ function mcp_register_content_abilities(): void {
 					'bytes'       => array( 'type' => 'integer' ),
 				),
 			),
-			'execute_callback'    => function ( array $input ): array {
+			'execute_callback'    => function ( array $input ) use ( $mcp_create_backup, $mcp_log_filesystem_operation ): array {
 				$path    = $input['path'] ?? '';
 				$content = $input['content'] ?? '';
 				$backup  = $input['backup'] ?? true;
+				$context = $input['context'] ?? '';
 
 				if ( empty( $path ) ) {
 					return array(
@@ -5675,12 +5861,13 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
-				$backup_path = null;
+				$backup_path  = null;
+				$size_before  = file_exists( $full_path_normalized ) ? filesize( $full_path_normalized ) : 0;
 
-				// Create backup if file exists.
+				// Create backup if file exists (using centralized backup).
 				if ( $backup && file_exists( $full_path_normalized ) ) {
-					$backup_path = $full_path_normalized . '.bak.' . gmdate( 'YmdHis' );
-					if ( ! copy( $full_path_normalized, $backup_path ) ) {
+					$backup_path = $mcp_create_backup( $full_path_normalized );
+					if ( false === $backup_path ) {
 						return array(
 							'success' => false,
 							'message' => 'Failed to create backup.',
@@ -5696,6 +5883,14 @@ function mcp_register_content_abilities(): void {
 						'message' => 'Failed to write file: ' . $path,
 					);
 				}
+
+				// Log the operation.
+				$mcp_log_filesystem_operation( 'WRITE', $full_path_normalized, array(
+					'backup'      => $backup_path,
+					'size_before' => $size_before,
+					'size_after'  => $bytes,
+					'context'     => $context,
+				) );
 
 				$result = array(
 					'success' => true,
@@ -5748,6 +5943,15 @@ function mcp_register_content_abilities(): void {
 						'default'     => false,
 						'description' => 'If true, add content to the beginning instead of the end.',
 					),
+					'backup'  => array(
+						'type'        => 'boolean',
+						'default'     => true,
+						'description' => 'Create a backup before modifying (default: true).',
+					),
+					'context' => array(
+						'type'        => 'string',
+						'description' => 'Brief description of why this change is being made (logged for recovery).',
+					),
 				),
 				'required'             => array( 'path', 'content' ),
 				'additionalProperties' => false,
@@ -5755,16 +5959,19 @@ function mcp_register_content_abilities(): void {
 			'output_schema'       => array(
 				'type'       => 'object',
 				'properties' => array(
-					'success' => array( 'type' => 'boolean' ),
-					'message' => array( 'type' => 'string' ),
-					'path'    => array( 'type' => 'string' ),
-					'bytes'   => array( 'type' => 'integer' ),
+					'success'     => array( 'type' => 'boolean' ),
+					'message'     => array( 'type' => 'string' ),
+					'path'        => array( 'type' => 'string' ),
+					'backup_path' => array( 'type' => 'string' ),
+					'bytes'       => array( 'type' => 'integer' ),
 				),
 			),
-			'execute_callback'    => function ( array $input ): array {
+			'execute_callback'    => function ( array $input ) use ( $mcp_create_backup, $mcp_log_filesystem_operation ): array {
 				$path    = $input['path'] ?? '';
 				$content = $input['content'] ?? '';
 				$prepend = $input['prepend'] ?? false;
+				$backup  = $input['backup'] ?? true;
+				$context = $input['context'] ?? '';
 
 				if ( empty( $path ) ) {
 					return array(
@@ -5807,6 +6014,20 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
+				$backup_path = null;
+				$size_before = filesize( $full_path );
+
+				// Create backup before modifying.
+				if ( $backup ) {
+					$backup_path = $mcp_create_backup( $full_path );
+					if ( false === $backup_path ) {
+						return array(
+							'success' => false,
+							'message' => 'Failed to create backup.',
+						);
+					}
+				}
+
 				if ( $prepend ) {
 					$existing = file_get_contents( $full_path );
 					$bytes    = file_put_contents( $full_path, $content . $existing );
@@ -5821,12 +6042,28 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
-				return array(
+				$size_after = filesize( $full_path );
+
+				// Log the operation.
+				$mcp_log_filesystem_operation( 'APPEND', $full_path, array(
+					'backup'      => $backup_path,
+					'size_before' => $size_before,
+					'size_after'  => $size_after,
+					'context'     => $context . ( $prepend ? ' (prepend)' : '' ),
+				) );
+
+				$result = array(
 					'success' => true,
 					'message' => 'Content appended successfully.',
 					'path'    => $full_path,
 					'bytes'   => $bytes,
 				);
+
+				if ( $backup_path ) {
+					$result['backup_path'] = $backup_path;
+				}
+
+				return $result;
 			},
 			'permission_callback' => function (): bool {
 				return current_user_can( 'manage_options' );
@@ -5834,7 +6071,7 @@ function mcp_register_content_abilities(): void {
 			'meta'                => array(
 				'annotations' => array(
 					'readonly'    => false,
-					'destructive' => false,
+					'destructive' => true,
 					'idempotent'  => false,
 				),
 			),
