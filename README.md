@@ -17,8 +17,8 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 
 - WordPress 6.9+
 - PHP 8.0+
-- [Abilities API](https://wordpress.org/plugins/abilities-api/) plugin (from WordPress.org)
-- [MCP Adapter](https://wordpress.org/plugins/mcp-adapter/) plugin (from WordPress.org)
+- [Abilities API](https://github.com/WordPress/abilities-api) plugin (WordPress core team)
+- [MCP Adapter](https://github.com/WordPress/mcp-adapter) plugin (WordPress core team)
 
 ## Installation
 
@@ -217,8 +217,8 @@ Now Claude can directly edit your WordPress site through conversation.
 
 Three-plugin stack:
 
-1. **[Abilities API](https://wordpress.org/plugins/abilities-api/)** - Framework for registering abilities
-2. **[MCP Adapter](https://wordpress.org/plugins/mcp-adapter/)** - MCP protocol layer
+1. **[Abilities API](https://github.com/WordPress/abilities-api)** - Framework for registering abilities (WordPress core team)
+2. **[MCP Adapter](https://github.com/WordPress/mcp-adapter)** - MCP protocol layer (WordPress core team)
 3. **MCP Expose Abilities** (this plugin) - The actual abilities
 
 ## Contributing
@@ -262,5 +262,5 @@ GPL-2.0+
 
 - [Plugin Page](https://devenia.com/plugins/mcp-expose-abilities/)
 - [Blog Post](https://devenia.com/we-built-a-wordpress-plugin-that-lets-ai-edit-your-site/)
-- [Abilities API](https://wordpress.org/plugins/abilities-api/)
-- [MCP Adapter](https://wordpress.org/plugins/mcp-adapter/)
+- [Abilities API](https://github.com/WordPress/abilities-api) (WordPress core team)
+- [MCP Adapter](https://github.com/WordPress/mcp-adapter) (WordPress core team)
