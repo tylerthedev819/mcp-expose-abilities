@@ -1,6 +1,6 @@
 # MCP Expose Abilities
 
-**Let AI assistants edit your WordPress site.** 56 abilities for content, menus, users, media, Elementor, system, and more.
+**Let AI assistants edit your WordPress site.** 67 abilities for content, menus, users, media, filesystem, Elementor, system, and more.
 
 [![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-expose-abilities)](https://github.com/bjornfix/mcp-expose-abilities/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
@@ -27,9 +27,9 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 3. Upload via WordPress Admin → Plugins → Add New → Upload Plugin
 4. Activate the plugin
 
-## All 56 Abilities
+## All 67 Abilities
 
-### Content Management (15)
+### Content Management (18)
 
 | Ability | Description |
 |---------|-------------|
@@ -48,6 +48,8 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 | `content/list-categories` | List all categories |
 | `content/list-tags` | List all tags |
 | `content/create-tag` | Create new tag |
+| `content/list-media` | List media items |
+| `content/list-users` | List users |
 | `content/search` | Search across posts, pages, media |
 
 ### Menu Management (7)
@@ -96,13 +98,14 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 | `plugins/upload` | Upload plugin from URL |
 | `plugins/list` | List installed plugins |
 
-### Elementor (5)
+### Elementor (6)
 
 | Ability | Description |
 |---------|-------------|
 | `elementor/get-data` | Get Elementor JSON for a page |
 | `elementor/update-data` | Replace Elementor JSON |
 | `elementor/patch-data` | Find/replace in Elementor JSON |
+| `elementor/update-element` | Update specific element by ID |
 | `elementor/list-templates` | List saved templates |
 | `elementor/clear-cache` | Clear CSS cache |
 
@@ -121,19 +124,42 @@ This plugin exposes WordPress functionality through MCP (Model Context Protocol)
 | `generateblocks/update-global-styles` | Update global styles |
 | `generateblocks/clear-cache` | Clear CSS cache |
 
-### Core (3)
+### System (3)
 
 | Ability | Description |
 |---------|-------------|
-| `core/get-site-info` | Site information |
-| `core/get-user-info` | Current user profile |
-| `core/get-environment-info` | PHP/DB/runtime info |
-
-### System (1)
-
-| Ability | Description |
-|---------|-------------|
+| `system/get-transient` | Get transient value |
+| `system/debug-log` | Read debug.log file |
 | `system/toggle-debug` | Toggle WP_DEBUG, WP_DEBUG_LOG, WP_DEBUG_DISPLAY in wp-config.php |
+
+### Options (3)
+
+| Ability | Description |
+|---------|-------------|
+| `options/get` | Get option value |
+| `options/update` | Update option (protected options blocked) |
+| `options/list` | List all options |
+
+### Filesystem (10)
+
+| Ability | Description |
+|---------|-------------|
+| `filesystem/get-changelog` | Get plugin/theme changelog |
+| `filesystem/read-file` | Read file contents (security hardened) |
+| `filesystem/write-file` | Write file (PHP code blocked) |
+| `filesystem/append-file` | Append to file |
+| `filesystem/list-directory` | List directory contents |
+| `filesystem/delete-file` | Delete file (creates backup) |
+| `filesystem/file-info` | Get file metadata |
+| `filesystem/create-directory` | Create directory |
+| `filesystem/copy-file` | Copy file |
+| `filesystem/move-file` | Move/rename file |
+
+### Cloudflare (1)
+
+| Ability | Description |
+|---------|-------------|
+| `cloudflare/clear-cache` | Clear Cloudflare cache |
 
 ## Usage with Claude Code
 
