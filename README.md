@@ -253,6 +253,30 @@ PRs welcome! If you add useful abilities, share them.
 
 ## Changelog
 
+### 2.2.12
+- Security: Added protected options blocklist (active_plugins, siteurl, admin_email, etc.)
+- Security: Prevents accidental site breakage via options/update
+- Total: 67 abilities
+
+### 2.2.11
+- Security: Added UTF-7 and UTF-16 encoding bypass detection
+- Security: Blocks encoded PHP injection attempts
+
+### 2.2.10
+- Security: Major filesystem security hardening
+- Security: PHP code detection in file writes
+- Security: Path traversal protection
+- Security: Restricted to wp-content directory
+
+### 2.1.0
+- Added: Filesystem abilities (read-file, write-file, append-file, delete-file, list-directory, file-info, create-directory, copy-file, move-file, get-changelog)
+- Added: Options abilities (get, update, list)
+- Added: System abilities (get-transient, debug-log)
+- Added: Cloudflare cache clear ability
+- Added: `elementor/update-element` for targeted element updates
+- Added: `content/list-media`, `content/list-users`
+- Total: 67 abilities
+
 ### 2.0.2
 - Added: `content/create-tag` ability to create post tags via MCP
 - Total: 56 abilities
