@@ -24,9 +24,9 @@ Version 3.0 introduced a modular architecture. The core plugin provides WordPres
 | [MCP Abilities - Elementor](https://github.com/bjornfix/mcp-abilities-elementor) | 6 | Elementor page builder integration |
 | [MCP Abilities - GeneratePress](https://github.com/bjornfix/mcp-abilities-generatepress) | 5 | GeneratePress theme + GenerateBlocks |
 | [MCP Abilities - Cloudflare](https://github.com/bjornfix/mcp-abilities-cloudflare) | 1 | Cloudflare cache management |
-| [MCP Abilities - Email](https://github.com/bjornfix/mcp-abilities-email) | 5 | Email sending and logging |
+| [MCP Abilities - Email](https://github.com/bjornfix/mcp-abilities-email) | 8 | Gmail API with service account |
 
-**Total ecosystem: 72 abilities**
+**Total ecosystem: 75 abilities**
 
 Install only what you need. Running GeneratePress? Install that add-on. Don't use Elementor? Skip it.
 
@@ -176,15 +176,18 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 |---------|-------------|
 | `cloudflare/clear-cache` | Clear Cloudflare cache (entire site or specific URLs) |
 
-### Email (mcp-abilities-email) - 5 abilities
+### Email (mcp-abilities-email) - 8 abilities
 
 | Ability | Description |
 |---------|-------------|
-| `email/send` | Send email with HTML support, CC, BCC, attachments |
-| `email/send-test` | Send test email to verify configuration |
-| `email/get-settings` | Get WordPress email settings |
-| `email/get-log` | Get email log (requires logging plugin) |
-| `email/resend` | Resend previously logged email |
+| `gmail/configure` | Set up Gmail API service account credentials |
+| `gmail/status` | Check API connection status and configuration |
+| `gmail/list` | List inbox messages with filtering |
+| `gmail/get` | Get full email content by ID |
+| `gmail/send` | Send email with HTML, attachments, CC, BCC |
+| `gmail/modify` | Modify labels (archive, mark read/unread, etc.) |
+| `gmail/reply` | Reply to an existing email thread |
+| `email/send` | Send email via WordPress wp_mail (fallback) |
 
 ## Usage with Claude Code
 
