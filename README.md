@@ -1,11 +1,16 @@
 # MCP Expose Abilities
 
-**Let AI assistants edit your WordPress site.** Core WordPress abilities for content, menus, users, media, widgets, plugins, options, and system management.
+Let AI assistants edit your WordPress site via MCP.
 
 [![GitHub release](https://img.shields.io/github/v/release/bjornfix/mcp-expose-abilities)](https://github.com/bjornfix/mcp-expose-abilities/releases)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
+
+**Tested up to:** 6.7
+**Stable tag:** 3.0.4
+**License:** GPLv2 or later
+**License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
 ## What It Does
 

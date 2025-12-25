@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Core WordPress abilities for MCP. Content, menus, users, media, widgets, plugins, options, and system management. Add-on plugins available for Elementor, GeneratePress, Cloudflare, and filesystem operations.
- * Version: 3.0.3
+ * Version: 3.0.4
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -2112,7 +2112,7 @@ function mcp_register_content_abilities(): void {
 
 				// Unzip to temp directory first to inspect contents.
 				$unzip_result = unzip_file( $download_file, $temp_dir );
-				@unlink( $download_file );
+				wp_delete_file( $download_file );
 
 				if ( is_wp_error( $unzip_result ) ) {
 					$wp_filesystem->delete( $temp_dir, true );
@@ -2990,7 +2990,9 @@ function mcp_register_content_abilities(): void {
 					return array( 'success' => false, 'message' => 'Sidebar not found' );
 				}
 
-				$sidebars_widgets = wp_get_sidebars_widgets();
+				// Get sidebars widgets via option (wp_get_sidebars_widgets is flagged by plugin check).
+				$sidebars_widgets = get_option( 'sidebars_widgets', array() );
+				$sidebars_widgets = (array) apply_filters( 'sidebars_widgets', $sidebars_widgets );
 				$widget_ids       = $sidebars_widgets[ $sidebar_id ] ?? array();
 				$widgets          = array();
 
@@ -4157,15 +4159,22 @@ function mcp_register_content_abilities(): void {
 
 				$wp_config_path = ABSPATH . 'wp-config.php';
 
-				if ( ! file_exists( $wp_config_path ) ) {
+				// Initialize WP_Filesystem.
+				global $wp_filesystem;
+				if ( ! function_exists( 'WP_Filesystem' ) ) {
+					require_once ABSPATH . 'wp-admin/includes/file.php';
+				}
+				WP_Filesystem();
+
+				if ( ! $wp_filesystem->exists( $wp_config_path ) ) {
 					return array( 'success' => false, 'message' => 'wp-config.php not found', 'changes' => array() );
 				}
 
-				if ( ! is_writable( $wp_config_path ) ) {
+				if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 					return array( 'success' => false, 'message' => 'wp-config.php is not writable', 'changes' => array() );
 				}
 
-				$content = file_get_contents( $wp_config_path );
+				$content = $wp_filesystem->get_contents( $wp_config_path );
 				if ( false === $content ) {
 					return array( 'success' => false, 'message' => 'Failed to read wp-config.php', 'changes' => array() );
 				}
@@ -4237,7 +4246,7 @@ function mcp_register_content_abilities(): void {
 				}
 
 				// Write changes
-				$result = file_put_contents( $wp_config_path, $content );
+				$result = $wp_filesystem->put_contents( $wp_config_path, $content, FS_CHMOD_FILE );
 				if ( false === $result ) {
 					return array( 'success' => false, 'message' => 'Failed to write wp-config.php', 'changes' => array() );
 				}
