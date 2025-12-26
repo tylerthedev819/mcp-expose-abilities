@@ -7,8 +7,8 @@ Let AI assistants edit your WordPress site via MCP.
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-blue.svg)](https://wordpress.org)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
-**Tested up to:** 6.7
-**Stable tag:** 3.0.4
+**Tested up to:** 6.9
+**Stable tag:** 3.0.7
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,14 +24,14 @@ Version 3.0 introduced a modular architecture. The core plugin provides WordPres
 
 | Plugin | Abilities | Description |
 |--------|-----------|-------------|
-| **MCP Expose Abilities** (core) | 45 | WordPress core: content, menus, users, media, widgets, plugins, options, system |
+| **MCP Expose Abilities** (core) | 47 | WordPress core: content, menus, users, media, widgets, plugins, options, system |
 | [MCP Abilities - Filesystem](https://github.com/bjornfix/mcp-abilities-filesystem) | 10 | File operations with security hardening |
 | [MCP Abilities - Elementor](https://github.com/bjornfix/mcp-abilities-elementor) | 6 | Elementor page builder integration |
 | [MCP Abilities - GeneratePress](https://github.com/bjornfix/mcp-abilities-generatepress) | 5 | GeneratePress theme + GenerateBlocks |
 | [MCP Abilities - Cloudflare](https://github.com/bjornfix/mcp-abilities-cloudflare) | 1 | Cloudflare cache management |
 | [MCP Abilities - Email](https://github.com/bjornfix/mcp-abilities-email) | 8 | Gmail API with service account |
 
-**Total ecosystem: 75 abilities**
+**Total ecosystem: 77 abilities**
 
 Install only what you need. Running GeneratePress? Install that add-on. Don't use Elementor? Skip it.
 
@@ -50,9 +50,9 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 4. Activate the plugin
 5. (Optional) Install add-on plugins for vendor-specific features
 
-## Core Plugin Abilities (45)
+## Core Plugin Abilities (47)
 
-### Content Management (18)
+### Content Management (20)
 
 | Ability | Description |
 |---------|-------------|
@@ -74,6 +74,8 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 | `content/list-media` | List media items |
 | `content/list-users` | List users |
 | `content/search` | Search across posts, pages, media |
+| `content/list-revisions` | List revisions for a post/page |
+| `content/get-revision` | Get specific revision details |
 
 ### Menu Management (7)
 
@@ -114,12 +116,24 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 | `widgets/get-sidebar` | Get widgets in a sidebar |
 | `widgets/list-available` | List available widget types |
 
-### Plugin Management (2)
+### Plugin Management (3)
 
 | Ability | Description |
 |---------|-------------|
 | `plugins/upload` | Upload plugin from URL |
 | `plugins/list` | List installed plugins |
+| `plugins/delete` | Delete inactive plugin |
+
+### Comments (6)
+
+| Ability | Description |
+|---------|-------------|
+| `comments/list` | List comments with filtering |
+| `comments/get` | Get single comment details |
+| `comments/create` | Create top-level comment |
+| `comments/reply` | Reply to existing comment |
+| `comments/update-status` | Update comment status (approve, spam, trash) |
+| `comments/delete` | Delete comment |
 
 ### Options (3)
 
@@ -285,10 +299,28 @@ Three-plugin stack plus optional add-ons:
 
 ## Changelog
 
+### 3.0.7
+- Improved: All 47 ability descriptions now include parameter hints
+
+### 3.0.6
+- Added: `comments/create` ability for top-level comments
+
+### 3.0.5
+- Added: `plugins/delete` ability to remove inactive plugins
+
+### 3.0.4
+- Fixed: Use WP_Filesystem API instead of native PHP functions
+- Fixed: Replaced wp_get_sidebars_widgets with direct option call
+
+### 3.0.3
+- Added: Revisions abilities (`content/list-revisions`, `content/get-revision`)
+- Added: Comments abilities (list, get, create, reply, update-status, delete)
+- Added: `author_id` parameter for content creation
+
 ### 3.0.0
 - **Breaking:** Modular architecture - vendor-specific abilities moved to add-on plugins
-- Core plugin now contains only WordPress-native abilities (45)
-- Add-on plugins: Filesystem (10), Elementor (6), GeneratePress (5), Cloudflare (1), Email (5)
+- Core plugin now contains only WordPress-native abilities
+- Add-on plugins: Filesystem (10), Elementor (6), GeneratePress (5), Cloudflare (1), Email (8)
 - Cleaner installation - install only what you need
 
 ### 2.2.12
