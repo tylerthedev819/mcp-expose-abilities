@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Core WordPress abilities for MCP. Content, menus, users, media, widgets, plugins, options, and system management. Add-on plugins available for Elementor, GeneratePress, Cloudflare, and filesystem operations.
- * Version: 3.0.8
+ * Version: 3.0.9
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -254,6 +254,10 @@ function mcp_register_content_abilities(): void {
 					return array( 'error' => 'Post not found' );
 				}
 
+				if ( ! current_user_can( 'read_post', $post->ID ) ) {
+					return array( 'error' => 'Permission denied' );
+				}
+
 				$categories = wp_get_post_categories( $post->ID, array( 'fields' => 'all' ) );
 				$tags       = wp_get_post_tags( $post->ID );
 				$author     = get_user_by( 'id', $post->post_author );
@@ -363,6 +367,13 @@ function mcp_register_content_abilities(): void {
 
 				if ( empty( $input['title'] ) ) {
 					return array( 'success' => false, 'message' => 'Title is required' );
+				}
+
+				if ( ! empty( $input['author_id'] ) ) {
+					$author_id = intval( $input['author_id'] );
+					if ( $author_id !== get_current_user_id() && ! current_user_can( 'edit_others_posts' ) ) {
+						return array( 'success' => false, 'message' => 'Permission denied to set a different author.' );
+					}
 				}
 
 				$post_data = array(
@@ -492,6 +503,10 @@ function mcp_register_content_abilities(): void {
 					return array( 'success' => false, 'message' => 'Post not found' );
 				}
 
+				if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to edit this post.' );
+				}
+
 				$post_data = array( 'ID' => $input['id'] );
 
 				if ( isset( $input['title'] ) ) {
@@ -510,7 +525,11 @@ function mcp_register_content_abilities(): void {
 					$post_data['post_name'] = sanitize_title( $input['slug'] );
 				}
 				if ( isset( $input['author_id'] ) ) {
-					$post_data['post_author'] = intval( $input['author_id'] );
+					$author_id = intval( $input['author_id'] );
+					if ( $author_id !== get_current_user_id() && ! current_user_can( 'edit_others_posts' ) ) {
+						return array( 'success' => false, 'message' => 'Permission denied to change the author.' );
+					}
+					$post_data['post_author'] = $author_id;
 				}
 
 				$result = wp_update_post( $post_data, true );
@@ -588,6 +607,10 @@ function mcp_register_content_abilities(): void {
 				$post = get_post( $input['id'] );
 				if ( ! $post ) {
 					return array( 'success' => false, 'message' => 'Post not found' );
+				}
+
+				if ( ! current_user_can( 'delete_post', $post->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to delete this post.' );
 				}
 
 				$force  = ! empty( $input['force'] );
@@ -783,6 +806,10 @@ function mcp_register_content_abilities(): void {
 
 				if ( ! $page ) {
 					return array( 'success' => false, 'message' => 'Page not found' );
+				}
+
+				if ( ! current_user_can( 'read_post', $page->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied' );
 				}
 
 				$author    = get_user_by( 'id', $page->post_author );
@@ -1009,6 +1036,14 @@ function mcp_register_content_abilities(): void {
 				$page = get_post( $input['id'] );
 				if ( ! $page || 'page' !== $page->post_type ) {
 					return array( 'success' => false, 'message' => 'Page not found' );
+				}
+
+				if ( ! current_user_can( 'delete_post', $page->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to delete this page.' );
+				}
+
+				if ( ! current_user_can( 'edit_post', $page->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to edit this page.' );
 				}
 
 				$page_data = array( 'ID' => $input['id'] );
@@ -3440,6 +3475,10 @@ function mcp_register_content_abilities(): void {
 					return array( 'success' => false, 'message' => 'User not found' );
 				}
 
+				if ( ! current_user_can( 'edit_user', $user->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to view this user.' );
+				}
+
 				return array(
 					'success' => true,
 					'user'    => array(
@@ -3666,6 +3705,10 @@ function mcp_register_content_abilities(): void {
 					return array( 'success' => false, 'message' => 'User not found' );
 				}
 
+				if ( ! current_user_can( 'edit_user', $user->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to update this user.' );
+				}
+
 				$userdata = array( 'ID' => $input['id'] );
 
 				if ( isset( $input['email'] ) ) {
@@ -3687,6 +3730,9 @@ function mcp_register_content_abilities(): void {
 					$userdata['nickname'] = sanitize_text_field( $input['nickname'] );
 				}
 				if ( isset( $input['role'] ) ) {
+					if ( ! current_user_can( 'promote_user', $user->ID ) ) {
+						return array( 'success' => false, 'message' => 'Permission denied to change user role.' );
+					}
 					$userdata['role'] = $input['role'];
 				}
 				if ( isset( $input['url'] ) ) {
@@ -3761,6 +3807,10 @@ function mcp_register_content_abilities(): void {
 				$user = get_user_by( 'id', $input['id'] );
 				if ( ! $user ) {
 					return array( 'success' => false, 'message' => 'User not found' );
+				}
+
+				if ( ! current_user_can( 'delete_user', $user->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to delete this user.' );
 				}
 
 				// Don't allow deleting yourself.
@@ -3968,6 +4018,10 @@ function mcp_register_content_abilities(): void {
 					return array( 'success' => false, 'message' => 'Media not found' );
 				}
 
+				if ( ! current_user_can( 'read_post', $attachment->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to view this media item.' );
+				}
+
 				$metadata = wp_get_attachment_metadata( $input['id'] );
 				$sizes    = array();
 
@@ -4070,6 +4124,10 @@ function mcp_register_content_abilities(): void {
 					return array( 'success' => false, 'message' => 'Media not found' );
 				}
 
+				if ( ! current_user_can( 'edit_post', $attachment->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to update this media item.' );
+				}
+
 				$post_data = array( 'ID' => $input['id'] );
 
 				if ( isset( $input['title'] ) ) {
@@ -4152,6 +4210,10 @@ function mcp_register_content_abilities(): void {
 				$attachment = get_post( $input['id'] );
 				if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
 					return array( 'success' => false, 'message' => 'Media not found' );
+				}
+
+				if ( ! current_user_can( 'delete_post', $attachment->ID ) ) {
+					return array( 'success' => false, 'message' => 'Permission denied to delete this media item.' );
 				}
 
 				$force  = $input['force'] ?? true;
@@ -4884,6 +4946,13 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
+				if ( ! current_user_can( 'edit_comment', $comment->comment_ID ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'You do not have permission to access this comment.',
+					);
+				}
+
 				return array(
 					'success' => true,
 					'comment' => array(
@@ -4947,6 +5016,13 @@ function mcp_register_content_abilities(): void {
 					return array(
 						'success' => false,
 						'error'   => 'Comment not found.',
+					);
+				}
+
+				if ( ! current_user_can( 'edit_comment', $comment->comment_ID ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'You do not have permission to update this comment.',
 					);
 				}
 
@@ -5033,6 +5109,13 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
+				if ( ! current_user_can( 'edit_comment', $parent->comment_ID ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'You do not have permission to reply to this comment.',
+					);
+				}
+
 				$user = wp_get_current_user();
 
 				// Use provided user_id or fall back to authenticated user.
@@ -5043,6 +5126,13 @@ function mcp_register_content_abilities(): void {
 					return array(
 						'success' => false,
 						'error'   => 'User ID ' . $params['user_id'] . ' not found.',
+					);
+				}
+
+				if ( $comment_user_id !== $user->ID && ! current_user_can( 'edit_user', $comment_user_id ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'You do not have permission to post as this user.',
 					);
 				}
 
@@ -5135,6 +5225,13 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
+				if ( ! current_user_can( 'edit_post', $post->ID ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'You do not have permission to comment on this post.',
+					);
+				}
+
 				$user = wp_get_current_user();
 
 				// Use provided user_id or fall back to authenticated user.
@@ -5145,6 +5242,13 @@ function mcp_register_content_abilities(): void {
 					return array(
 						'success' => false,
 						'error'   => 'User ID ' . $params['user_id'] . ' not found.',
+					);
+				}
+
+				if ( $comment_user_id !== $user->ID && ! current_user_can( 'edit_user', $comment_user_id ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'You do not have permission to post as this user.',
 					);
 				}
 
@@ -5218,6 +5322,13 @@ function mcp_register_content_abilities(): void {
 					return array(
 						'success' => false,
 						'error'   => 'Comment not found.',
+					);
+				}
+
+				if ( ! current_user_can( 'edit_comment', $comment->comment_ID ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'You do not have permission to delete this comment.',
 					);
 				}
 
