@@ -8,7 +8,7 @@ Let AI assistants edit your WordPress site via MCP.
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 6.9
-**Stable tag:** 3.0.9
+**Stable tag:** 3.0.10
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -24,14 +24,14 @@ Version 3.0 introduced a modular architecture. The core plugin provides WordPres
 
 | Plugin | Abilities | Description |
 |--------|-----------|-------------|
-| **MCP Expose Abilities** (core) | 49 | WordPress core: content, menus, users, media, widgets, plugins, options, system |
+| **MCP Expose Abilities** (core) | 50 | WordPress core: content, menus, users, media, widgets, plugins, options, system |
 | [MCP Abilities - Filesystem](https://github.com/bjornfix/mcp-abilities-filesystem) | 10 | File operations with security hardening |
 | [MCP Abilities - Elementor](https://github.com/bjornfix/mcp-abilities-elementor) | 6 | Elementor page builder integration |
 | [MCP Abilities - GeneratePress](https://github.com/bjornfix/mcp-abilities-generatepress) | 5 | GeneratePress theme + GenerateBlocks |
 | [MCP Abilities - Cloudflare](https://github.com/bjornfix/mcp-abilities-cloudflare) | 1 | Cloudflare cache management |
 | [MCP Abilities - Email](https://github.com/bjornfix/mcp-abilities-email) | 8 | Gmail API with service account |
 
-**Total ecosystem: 79 abilities**
+**Total ecosystem: 80 abilities**
 
 Install only what you need. Running GeneratePress? Install that add-on. Don't use Elementor? Skip it.
 
@@ -50,9 +50,9 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 4. Activate the plugin
 5. (Optional) Install add-on plugins for vendor-specific features
 
-## Core Plugin Abilities (49)
+## Core Plugin Abilities (50)
 
-### Content Management (20)
+### Content Management (21)
 
 | Ability | Description |
 |---------|-------------|
@@ -69,6 +69,7 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 | `content/delete-page` | Delete page |
 | `content/patch-page` | Find/replace in page content |
 | `content/list-categories` | List all categories |
+| `content/create-category` | Create new category |
 | `content/list-tags` | List all tags |
 | `content/create-tag` | Create new tag |
 | `content/list-media` | List media items |
@@ -300,6 +301,9 @@ Three-plugin stack plus optional add-ons:
 4. **Add-on plugins** (optional) - Vendor-specific abilities
 
 ## Changelog
+
+### 3.0.10
+- Added: `content/create-category` ability
 
 ### 3.0.9
 - Security: Added per-item capability checks for content, media, users, and comments

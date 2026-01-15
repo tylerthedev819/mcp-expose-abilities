@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Core WordPress abilities for MCP. Content, menus, users, media, widgets, plugins, options, and system management. Add-on plugins available for Elementor, GeneratePress, Cloudflare, and filesystem operations.
- * Version: 3.0.9
+ * Version: 3.0.10
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -1507,6 +1507,105 @@ function mcp_register_content_abilities(): void {
 					'readonly'    => true,
 					'destructive' => false,
 					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// CATEGORIES - Create
+	// =========================================================================
+	wp_register_ability(
+		'content/create-category',
+		array(
+			'label'               => 'Create Category',
+			'description'         => 'Create category. Params: name (required), slug, description, parent.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'name' ),
+				'properties'           => array(
+					'name'        => array(
+						'type'        => 'string',
+						'description' => 'The category name.',
+					),
+					'slug'        => array(
+						'type'        => 'string',
+						'description' => 'The category slug (optional, auto-generated from name if not provided).',
+					),
+					'description' => array(
+						'type'        => 'string',
+						'description' => 'The category description (optional).',
+					),
+					'parent'      => array(
+						'type'        => 'integer',
+						'description' => 'Parent category ID (optional). Use 0 for top-level.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array( 'type' => 'boolean' ),
+					'id'      => array( 'type' => 'integer' ),
+					'name'    => array( 'type' => 'string' ),
+					'slug'    => array( 'type' => 'string' ),
+					'message' => array( 'type' => 'string' ),
+				),
+			),
+			'execute_callback'    => function ( $input ): array {
+				$args = array();
+
+				if ( ! empty( $input['slug'] ) ) {
+					$args['slug'] = $input['slug'];
+				}
+
+				if ( ! empty( $input['description'] ) ) {
+					$args['description'] = $input['description'];
+				}
+
+				if ( isset( $input['parent'] ) ) {
+					$args['parent'] = (int) $input['parent'];
+				}
+
+				$result = wp_insert_term( $input['name'], 'category', $args );
+
+				if ( is_wp_error( $result ) ) {
+					if ( $result->get_error_code() === 'term_exists' ) {
+						$existing_term = get_term( $result->get_error_data(), 'category' );
+						return array(
+							'success' => true,
+							'id'      => $existing_term->term_id,
+							'name'    => $existing_term->name,
+							'slug'    => $existing_term->slug,
+							'message' => 'Category already exists.',
+						);
+					}
+					return array(
+						'success' => false,
+						'message' => $result->get_error_message(),
+					);
+				}
+
+				$term = get_term( $result['term_id'], 'category' );
+
+				return array(
+					'success' => true,
+					'id'      => $term->term_id,
+					'name'    => $term->name,
+					'slug'    => $term->slug,
+					'message' => 'Category created successfully.',
+				);
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'manage_categories' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => false,
 				),
 			),
 		)
