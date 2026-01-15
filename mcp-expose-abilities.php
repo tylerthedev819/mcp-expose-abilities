@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Core WordPress abilities for MCP. Content, menus, users, media, widgets, plugins, options, and system management. Add-on plugins available for Elementor, GeneratePress, Cloudflare, and filesystem operations.
- * Version: 3.0.10
+ * Version: 3.0.11
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -19,6 +19,152 @@ declare( strict_types=1 );
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
+}
+
+/**
+ * Install a plugin from a local zip file path.
+ *
+ * @param string $zip_path Path to the plugin zip file.
+ * @param array  $input    Ability input for activate/overwrite flags.
+ *
+ * @return array Result payload.
+ */
+function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array {
+	if ( empty( $zip_path ) || ! file_exists( $zip_path ) ) {
+		return array( 'success' => false, 'message' => 'Plugin zip file not found' );
+	}
+
+	// Include required WordPress files for plugin installation.
+	// Define stub for get_current_screen() if not available (REST API context).
+	if ( ! function_exists( 'get_current_screen' ) ) {
+		function get_current_screen() {
+			return null;
+		}
+	}
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
+	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+
+	// Prepare for unzipping.
+	WP_Filesystem();
+	global $wp_filesystem;
+
+	$plugins_dir = WP_PLUGIN_DIR;
+	$temp_dir    = $plugins_dir . '/mcp-temp-' . uniqid();
+
+	// Unzip to temp directory first to inspect contents.
+	$unzip_result = unzip_file( $zip_path, $temp_dir );
+	if ( is_wp_error( $unzip_result ) ) {
+		if ( $wp_filesystem ) {
+			$wp_filesystem->delete( $temp_dir, true );
+		}
+		return array( 'success' => false, 'message' => 'Unzip failed: ' . $unzip_result->get_error_message() );
+	}
+
+	// Find the plugin folder (first directory in the zip).
+	$files = $wp_filesystem ? $wp_filesystem->dirlist( $temp_dir ) : array();
+	if ( empty( $files ) ) {
+		if ( $wp_filesystem ) {
+			$wp_filesystem->delete( $temp_dir, true );
+		}
+		return array( 'success' => false, 'message' => 'Invalid plugin zip - no files found' );
+	}
+
+	$plugin_folder = '';
+	foreach ( $files as $file => $info ) {
+		if ( 'd' === $info['type'] ) {
+			$plugin_folder = $file;
+			break;
+		}
+	}
+
+	if ( empty( $plugin_folder ) ) {
+		$found_items = array();
+		foreach ( $files as $file => $info ) {
+			$found_items[] = $file . ' (type: ' . $info['type'] . ')';
+		}
+		if ( $wp_filesystem ) {
+			$wp_filesystem->delete( $temp_dir, true );
+		}
+		return array( 'success' => false, 'message' => 'Invalid plugin zip - no plugin folder found. Found: ' . implode( ', ', $found_items ) );
+	}
+
+	$target_dir  = $plugins_dir . '/' . $plugin_folder;
+	$source_dir  = $temp_dir . '/' . $plugin_folder;
+	$plugin_file = '';
+
+	// Check if plugin already exists.
+	if ( is_dir( $target_dir ) ) {
+		if ( empty( $input['overwrite'] ) && false === $input['overwrite'] ) {
+			if ( $wp_filesystem ) {
+				$wp_filesystem->delete( $temp_dir, true );
+			}
+			return array( 'success' => false, 'message' => 'Plugin already exists and overwrite is disabled' );
+		}
+		// Deactivate if active before overwriting.
+		$all_plugins = get_plugins();
+		foreach ( $all_plugins as $file => $data ) {
+			if ( strpos( $file, $plugin_folder . '/' ) === 0 ) {
+				$plugin_file = $file;
+				if ( is_plugin_active( $file ) ) {
+					deactivate_plugins( $file );
+				}
+				break;
+			}
+		}
+		// Remove old plugin.
+		if ( $wp_filesystem ) {
+			$wp_filesystem->delete( $target_dir, true );
+		}
+	}
+
+	// Move plugin to plugins directory.
+	$move_result = $wp_filesystem ? $wp_filesystem->move( $source_dir, $target_dir ) : false;
+	if ( $wp_filesystem ) {
+		$wp_filesystem->delete( $temp_dir, true );
+	}
+
+	if ( ! $move_result ) {
+		return array( 'success' => false, 'message' => 'Failed to move plugin to plugins directory' );
+	}
+
+	// Find the main plugin file if not already known.
+	if ( empty( $plugin_file ) ) {
+		$all_plugins = get_plugins();
+		foreach ( $all_plugins as $file => $data ) {
+			if ( strpos( $file, $plugin_folder . '/' ) === 0 ) {
+				$plugin_file = $file;
+				break;
+			}
+		}
+	}
+
+	if ( empty( $plugin_file ) ) {
+		return array( 'success' => false, 'message' => 'Plugin installed but main file not found' );
+	}
+
+	// Activate if requested.
+	$activated = false;
+	if ( ! empty( $input['activate'] ) || ! isset( $input['activate'] ) ) {
+		$activate_result = activate_plugin( $plugin_file );
+		if ( is_wp_error( $activate_result ) ) {
+			return array(
+				'success'   => true,
+				'message'   => 'Plugin installed but activation failed: ' . $activate_result->get_error_message(),
+				'plugin'    => $plugin_file,
+				'activated' => false,
+			);
+		}
+		$activated = true;
+	}
+
+	return array(
+		'success'   => true,
+		'message'   => 'Plugin installed successfully' . ( $activated ? ' and activated' : '' ),
+		'plugin'    => $plugin_file,
+		'activated' => $activated,
+	);
 }
 
 /**
@@ -2219,134 +2365,107 @@ function mcp_register_content_abilities(): void {
 					return array( 'success' => false, 'message' => 'Plugin URL is required' );
 				}
 
-				// Include required WordPress files for plugin installation.
-				// Define stub for get_current_screen() if not available (REST API context).
-				if ( ! function_exists( 'get_current_screen' ) ) {
-					function get_current_screen() {
-						return null;
-					}
-				}
-				require_once ABSPATH . 'wp-admin/includes/file.php';
-				require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
-				require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-				require_once ABSPATH . 'wp-admin/includes/plugin.php';
-
 				// Download the zip file.
 				$download_file = download_url( $input['url'] );
 				if ( is_wp_error( $download_file ) ) {
 					return array( 'success' => false, 'message' => 'Download failed: ' . $download_file->get_error_message() );
 				}
 
-				// Prepare for unzipping.
-				WP_Filesystem();
-				global $wp_filesystem;
-
-				$plugins_dir = WP_PLUGIN_DIR;
-				$temp_dir    = $plugins_dir . '/mcp-temp-' . uniqid();
-
-				// Unzip to temp directory first to inspect contents.
-				$unzip_result = unzip_file( $download_file, $temp_dir );
+				$result = mcp_expose_install_plugin_zip( $download_file, $input );
 				wp_delete_file( $download_file );
 
-				if ( is_wp_error( $unzip_result ) ) {
-					$wp_filesystem->delete( $temp_dir, true );
-					return array( 'success' => false, 'message' => 'Unzip failed: ' . $unzip_result->get_error_message() );
+				return $result;
+			},
+			'permission_callback' => function (): bool {
+				return current_user_can( 'install_plugins' );
+			},
+			'meta'                => array(
+				'annotations' => array(
+					'readonly'    => false,
+					'destructive' => false,
+					'idempotent'  => true,
+				),
+			),
+		)
+	);
+
+	// =========================================================================
+	// PLUGINS - Upload From Base64
+	// =========================================================================
+	wp_register_ability(
+		'plugins/upload-base64',
+		array(
+			'label'               => 'Upload Plugin (Base64)',
+			'description'         => 'Uploads and installs a plugin from base64-encoded zip content. Can optionally activate after install and overwrite existing plugin.',
+			'category'            => 'site',
+			'input_schema'        => array(
+				'type'                 => 'object',
+				'required'             => array( 'content_base64' ),
+				'properties'           => array(
+					'content_base64' => array(
+						'type'        => 'string',
+						'description' => 'Base64-encoded zip file content.',
+					),
+					'filename'       => array(
+						'type'        => 'string',
+						'description' => 'Optional filename used for the temp zip.',
+					),
+					'activate'       => array(
+						'type'        => 'boolean',
+						'default'     => true,
+						'description' => 'Activate the plugin after installation.',
+					),
+					'overwrite'      => array(
+						'type'        => 'boolean',
+						'default'     => true,
+						'description' => 'Overwrite existing plugin if it exists.',
+					),
+				),
+				'additionalProperties' => false,
+			),
+			'output_schema'       => array(
+				'type'       => 'object',
+				'properties' => array(
+					'success'   => array( 'type' => 'boolean' ),
+					'message'   => array( 'type' => 'string' ),
+					'plugin'    => array( 'type' => 'string' ),
+					'activated' => array( 'type' => 'boolean' ),
+				),
+			),
+			'execute_callback'    => function ( $input = array() ): array {
+				$input = is_array( $input ) ? $input : array();
+
+				if ( empty( $input['content_base64'] ) ) {
+					return array( 'success' => false, 'message' => 'content_base64 is required' );
 				}
 
-				// Find the plugin folder (first directory in the zip).
-				$files = $wp_filesystem->dirlist( $temp_dir );
-				if ( empty( $files ) ) {
-					$wp_filesystem->delete( $temp_dir, true );
-					return array( 'success' => false, 'message' => 'Invalid plugin zip - no files found' );
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+
+				$decoded = base64_decode( $input['content_base64'], true );
+				if ( false === $decoded ) {
+					return array( 'success' => false, 'message' => 'Invalid base64 payload' );
 				}
 
-				$plugin_folder = '';
-				foreach ( $files as $file => $info ) {
-					if ( 'd' === $info['type'] ) {
-						$plugin_folder = $file;
-						break;
-					}
+				$filename = ! empty( $input['filename'] ) ? sanitize_file_name( $input['filename'] ) : 'plugin.zip';
+				if ( ! str_ends_with( $filename, '.zip' ) ) {
+					$filename .= '.zip';
 				}
 
-				if ( empty( $plugin_folder ) ) {
-					// Debug: list what was found
-					$found_items = array();
-					foreach ( $files as $file => $info ) {
-						$found_items[] = $file . ' (type: ' . $info['type'] . ')';
-					}
-					$wp_filesystem->delete( $temp_dir, true );
-					return array( 'success' => false, 'message' => 'Invalid plugin zip - no plugin folder found. Found: ' . implode( ', ', $found_items ) );
+				$temp_file = wp_tempnam( $filename );
+				if ( ! $temp_file ) {
+					return array( 'success' => false, 'message' => 'Unable to create temporary file' );
 				}
 
-				$target_dir  = $plugins_dir . '/' . $plugin_folder;
-				$source_dir  = $temp_dir . '/' . $plugin_folder;
-				$plugin_file = '';
-
-				// Check if plugin already exists.
-				if ( is_dir( $target_dir ) ) {
-					if ( empty( $input['overwrite'] ) && false === $input['overwrite'] ) {
-						$wp_filesystem->delete( $temp_dir, true );
-						return array( 'success' => false, 'message' => 'Plugin already exists and overwrite is disabled' );
-					}
-					// Deactivate if active before overwriting.
-					$all_plugins = get_plugins();
-					foreach ( $all_plugins as $file => $data ) {
-						if ( strpos( $file, $plugin_folder . '/' ) === 0 ) {
-							$plugin_file = $file;
-							if ( is_plugin_active( $file ) ) {
-								deactivate_plugins( $file );
-							}
-							break;
-						}
-					}
-					// Remove old plugin.
-					$wp_filesystem->delete( $target_dir, true );
+				$bytes_written = file_put_contents( $temp_file, $decoded );
+				if ( false === $bytes_written ) {
+					wp_delete_file( $temp_file );
+					return array( 'success' => false, 'message' => 'Failed to write temporary zip file' );
 				}
 
-				// Move plugin to plugins directory.
-				$move_result = $wp_filesystem->move( $source_dir, $target_dir );
-				$wp_filesystem->delete( $temp_dir, true );
+				$result = mcp_expose_install_plugin_zip( $temp_file, $input );
+				wp_delete_file( $temp_file );
 
-				if ( ! $move_result ) {
-					return array( 'success' => false, 'message' => 'Failed to move plugin to plugins directory' );
-				}
-
-				// Find the main plugin file if not already known.
-				if ( empty( $plugin_file ) ) {
-					$all_plugins = get_plugins();
-					foreach ( $all_plugins as $file => $data ) {
-						if ( strpos( $file, $plugin_folder . '/' ) === 0 ) {
-							$plugin_file = $file;
-							break;
-						}
-					}
-				}
-
-				if ( empty( $plugin_file ) ) {
-					return array( 'success' => false, 'message' => 'Plugin installed but main file not found' );
-				}
-
-				// Activate if requested.
-				$activated = false;
-				if ( ! empty( $input['activate'] ) || ! isset( $input['activate'] ) ) {
-					$activate_result = activate_plugin( $plugin_file );
-					if ( is_wp_error( $activate_result ) ) {
-						return array(
-							'success'   => true,
-							'message'   => 'Plugin installed but activation failed: ' . $activate_result->get_error_message(),
-							'plugin'    => $plugin_file,
-							'activated' => false,
-						);
-					}
-					$activated = true;
-				}
-
-				return array(
-					'success'   => true,
-					'message'   => 'Plugin installed successfully' . ( $activated ? ' and activated' : '' ),
-					'plugin'    => $plugin_file,
-					'activated' => $activated,
-				);
+				return $result;
 			},
 			'permission_callback' => function (): bool {
 				return current_user_can( 'install_plugins' );
