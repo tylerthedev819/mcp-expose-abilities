@@ -8,13 +8,13 @@ Let AI assistants edit your WordPress site via MCP.
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 6.9
-**Stable tag:** 3.0.11
+**Stable tag:** 3.0.14
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
 ## What It Does
 
-This plugin exposes WordPress functionality through MCP (Model Context Protocol), enabling AI assistants like Claude to directly interact with your WordPress site. No more copy-pasting between chat and admin.
+This plugin exposes WordPress functionality through MCP (Model Context Protocol), enabling AI assistants to directly interact with your WordPress site. No more copy-pasting between chat and admin.
 
 **Example:** "Fix the phone numbers in these 25 articles to be clickable tel: links." - Done in 30 seconds, all 25 articles.
 
@@ -26,12 +26,16 @@ Version 3.0 introduced a modular architecture. The core plugin provides WordPres
 |--------|-----------|-------------|
 | **MCP Expose Abilities** (core) | 51 | WordPress core: content, menus, users, media, widgets, plugins, options, system |
 | [MCP Abilities - Filesystem](https://github.com/bjornfix/mcp-abilities-filesystem) | 10 | File operations with security hardening |
-| [MCP Abilities - Elementor](https://github.com/bjornfix/mcp-abilities-elementor) | 6 | Elementor page builder integration |
-| [MCP Abilities - GeneratePress](https://github.com/bjornfix/mcp-abilities-generatepress) | 5 | GeneratePress theme + GenerateBlocks |
+| [MCP Abilities - Elementor](https://github.com/bjornfix/mcp-abilities-elementor) | 36 | Elementor page builder integration |
+| [MCP Abilities - GeneratePress](https://github.com/bjornfix/mcp-abilities-generatepress) | 25 | GeneratePress theme + GenerateBlocks |
 | [MCP Abilities - Cloudflare](https://github.com/bjornfix/mcp-abilities-cloudflare) | 1 | Cloudflare cache management |
-| [MCP Abilities - Email](https://github.com/bjornfix/mcp-abilities-email) | 8 | Gmail API with service account |
+| [MCP Abilities - Google Workspace](https://github.com/bjornfix/mcp-abilities-workspace) | 8 | Gmail API via Workspace service account |
+| [MCP Abilities - Rank Math](https://github.com/bjornfix/mcp-abilities-rankmath) | 3 | Rank Math SEO metadata access |
+| [MCP Abilities - Wordfence](https://github.com/bjornfix/mcp-abilities-wordfence) | 8 | Wordfence security status + blocks |
+| [MCP Abilities - Brevo](https://github.com/bjornfix/mcp-abilities-brevo) | 12 | Brevo contacts, lists, campaigns |
+| [MCP Abilities - Advanced Ads](https://github.com/bjornfix/mcp-abilities-advads) | 9 | Advanced Ads management |
 
-**Total ecosystem: 81 abilities**
+**Total ecosystem: 163 abilities**
 
 Install only what you need. Running GeneratePress? Install that add-on. Don't use Elementor? Skip it.
 
@@ -172,7 +176,9 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 | `filesystem/copy-file` | Copy file |
 | `filesystem/move-file` | Move/rename file |
 
-### Elementor (mcp-abilities-elementor) - 6 abilities
+### Elementor (mcp-abilities-elementor) - 36 abilities
+
+See the add-on readme for the full list. Common abilities:
 
 | Ability | Description |
 |---------|-------------|
@@ -183,12 +189,17 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 | `elementor/list-templates` | List saved templates |
 | `elementor/clear-cache` | Clear CSS cache |
 
-### GeneratePress (mcp-abilities-generatepress) - 5 abilities
+### GeneratePress (mcp-abilities-generatepress) - 25 abilities
+
+See the add-on readme for the full list. Common abilities:
 
 | Ability | Description |
 |---------|-------------|
 | `generatepress/get-settings` | Get theme settings |
 | `generatepress/update-settings` | Update theme settings |
+| `generatepress/get-typography` | Get typography rules and font manager |
+| `generatepress/list-elements` | List GeneratePress Elements |
+| `generatepress/list-modules` | List module statuses |
 | `generateblocks/get-global-styles` | Get global styles |
 | `generateblocks/update-global-styles` | Update global styles |
 | `generateblocks/clear-cache` | Clear CSS cache |
@@ -199,7 +210,7 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 |---------|-------------|
 | `cloudflare/clear-cache` | Clear Cloudflare cache (entire site or specific URLs) |
 
-### Email (mcp-abilities-email) - 8 abilities
+### Google Workspace (mcp-abilities-workspace) - 8 abilities
 
 | Ability | Description |
 |---------|-------------|
@@ -210,9 +221,9 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 | `gmail/send` | Send email with HTML, attachments, CC, BCC |
 | `gmail/modify` | Modify labels (archive, mark read/unread, etc.) |
 | `gmail/reply` | Reply to an existing email thread |
-| `email/send` | Send email via WordPress wp_mail (fallback) |
+| `email/send` | Send email via WordPress wp_mail (non-Gmail fallback) |
 
-## Usage with Claude Code
+## Usage with MCP Clients
 
 ### 1. Create Application Password
 
@@ -220,15 +231,15 @@ WordPress Admin → Users → Your Profile → Application Passwords
 
 ### 2. Add MCP Server
 
-```bash
-claude mcp add wordpress-mysite "https://yoursite.com/wp-json/mcp/mcp-adapter-default-server" \
-  -t http \
-  -H "Authorization: Basic $(echo -n 'username:application-password' | base64)"
-```
+Configure your MCP client to connect to:
+
+`https://yoursite.com/wp-json/mcp/mcp-adapter-default-server`
+
+Use HTTP transport with a Basic Auth header generated from your WordPress username and application password.
 
 ### 3. Start Using
 
-Now Claude can directly edit your WordPress site through conversation.
+Your MCP client can now edit your WordPress site through conversation.
 
 ## Examples
 
@@ -303,6 +314,15 @@ Three-plugin stack plus optional add-ons:
 
 ## Changelog
 
+### 3.0.14
+- Fixed: plugins/delete now loads core file helpers before deletion
+
+### 3.0.13
+- Added: Shared pagination normalization for core list abilities
+
+### 3.0.12
+- Fixed: plugins/upload now loads WordPress download helpers in non-admin contexts
+
 ### 3.0.11
 * Added: plugins/upload-base64 ability for local file uploads
 
@@ -337,7 +357,7 @@ Three-plugin stack plus optional add-ons:
 ### 3.0.0
 - **Breaking:** Modular architecture - vendor-specific abilities moved to add-on plugins
 - Core plugin now contains only WordPress-native abilities
-- Add-on plugins: Filesystem (10), Elementor (6), GeneratePress (5), Cloudflare (1), Email (8)
+- Add-on plugins: Filesystem (10), Elementor (6), GeneratePress (5), Cloudflare (1), Google Workspace (8)
 - Cleaner installation - install only what you need
 
 ### 2.2.12

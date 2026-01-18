@@ -3,7 +3,7 @@ Contributors: devenia
 Tags: mcp, ai, automation, content, rest-api
 Requires at least: 6.9
 Tested up to: 6.9
-Stable tag: 3.0.11
+Stable tag: 3.0.14
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -12,7 +12,7 @@ Let AI assistants edit your WordPress site via MCP.
 
 == Description ==
 
-This plugin exposes WordPress functionality through MCP (Model Context Protocol), enabling AI assistants like Claude to directly interact with your WordPress site. No more copy-pasting between chat and admin.
+This plugin exposes WordPress functionality through MCP (Model Context Protocol), enabling AI assistants to directly interact with your WordPress site. No more copy-pasting between chat and admin.
 
 Core WordPress abilities for content, menus, users, media, widgets, plugins, options, and system management.
 
@@ -25,6 +25,15 @@ Core WordPress abilities for content, menus, users, media, widgets, plugins, opt
 5. (Optional) Install add-on plugins for vendor-specific features
 
 == Changelog ==
+
+= 3.0.14 =
+* Fixed: plugins/delete now loads core file helpers before deletion
+
+= 3.0.13 =
+* Added: Shared pagination normalization for core list abilities
+
+= 3.0.12 =
+* Fixed: plugins/upload now loads WordPress download helpers in non-admin contexts
 
 = 3.0.11 =
 * Added: plugins/upload-base64 ability for local file uploads

@@ -3,7 +3,7 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Core WordPress abilities for MCP. Content, menus, users, media, widgets, plugins, options, and system management. Add-on plugins available for Elementor, GeneratePress, Cloudflare, and filesystem operations.
- * Version: 3.0.11
+ * Version: 3.0.14
  * Author: Devenia
  * Author URI: https://devenia.com
  * License: GPL-2.0+
@@ -193,6 +193,27 @@ function mcp_expose_all_abilities( array $args, string $ability_name ): array {
 add_filter( 'wp_register_ability_args', 'mcp_expose_all_abilities', 10, 2 );
 
 /**
+ * Normalize pagination parameters for list abilities.
+ *
+ * @param array $input            Input array.
+ * @param int   $default_per_page Default per-page value.
+ * @param int   $max_per_page     Maximum per-page value.
+ * @return array{per_page:int,page:int}
+ */
+function mcp_expose_parse_pagination( array $input, int $default_per_page, int $max_per_page ): array {
+	$per_page = isset( $input['per_page'] ) ? (int) $input['per_page'] : $default_per_page;
+	$per_page = max( 1, min( $max_per_page, $per_page ) );
+
+	$page = isset( $input['page'] ) ? (int) $input['page'] : 1;
+	$page = max( 1, $page );
+
+	return array(
+		'per_page' => $per_page,
+		'page'     => $page,
+	);
+}
+
+/**
  * Register content management abilities.
  */
 function mcp_register_content_abilities(): void {
@@ -213,6 +234,11 @@ function mcp_register_content_abilities(): void {
 						'enum'        => array( 'publish', 'draft', 'pending', 'private', 'future', 'any' ),
 						'default'     => 'publish',
 						'description' => 'Filter by post status.',
+					),
+					'post_type'   => array(
+						'type'        => 'string',
+						'default'     => 'post',
+						'description' => 'Post type to list (default: post).',
 					),
 					'per_page'    => array(
 						'type'        => 'integer',
@@ -280,11 +306,17 @@ function mcp_register_content_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
+				$pagination = mcp_expose_parse_pagination( $input, 10, 100 );
+				$post_type = sanitize_key( $input['post_type'] ?? 'post' );
+				if ( ! post_type_exists( $post_type ) ) {
+					return array( 'success' => false, 'message' => 'Invalid post_type: ' . $post_type );
+				}
+
 				$args = array(
-					'post_type'      => 'post',
+					'post_type'      => $post_type,
 					'post_status'    => $input['status'] ?? 'publish',
-					'posts_per_page' => $input['per_page'] ?? 10,
-					'paged'          => $input['page'] ?? 1,
+					'posts_per_page' => $pagination['per_page'],
+					'paged'          => $pagination['page'],
 					'orderby'        => $input['orderby'] ?? 'date',
 					'order'          => $input['order'] ?? 'DESC',
 				);
@@ -364,6 +396,7 @@ function mcp_register_content_abilities(): void {
 			'output_schema'       => array(
 				'type'       => 'object',
 				'properties' => array(
+					'success'        => array( 'type' => 'boolean' ),
 					'id'             => array( 'type' => 'integer' ),
 					'title'          => array( 'type' => 'string' ),
 					'slug'           => array( 'type' => 'string' ),
@@ -378,6 +411,7 @@ function mcp_register_content_abilities(): void {
 					'tags'           => array( 'type' => 'array', 'items' => array( 'type' => 'object' ) ),
 					'featured_image' => array( 'type' => 'string' ),
 					'link'           => array( 'type' => 'string' ),
+					'message'        => array( 'type' => 'string' ),
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
@@ -397,11 +431,11 @@ function mcp_register_content_abilities(): void {
 				}
 
 				if ( ! $post ) {
-					return array( 'error' => 'Post not found' );
+					return array( 'success' => false, 'message' => 'Post not found' );
 				}
 
 				if ( ! current_user_can( 'read_post', $post->ID ) ) {
-					return array( 'error' => 'Permission denied' );
+					return array( 'success' => false, 'message' => 'Permission denied' );
 				}
 
 				$categories = wp_get_post_categories( $post->ID, array( 'fields' => 'all' ) );
@@ -410,6 +444,7 @@ function mcp_register_content_abilities(): void {
 				$thumbnail  = get_the_post_thumbnail_url( $post->ID, 'full' );
 
 				return array(
+					'success'        => true,
 					'id'             => $post->ID,
 					'title'          => $post->post_title,
 					'slug'           => $post->post_name,
@@ -428,6 +463,7 @@ function mcp_register_content_abilities(): void {
 					}, $tags ),
 					'featured_image' => $thumbnail ?: '',
 					'link'           => get_permalink( $post->ID ),
+					'message'        => 'Post retrieved successfully',
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -840,11 +876,12 @@ function mcp_register_content_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
+				$pagination = mcp_expose_parse_pagination( $input, 20, 100 );
 				$args = array(
 					'post_type'      => 'page',
 					'post_status'    => $input['status'] ?? 'publish',
-					'posts_per_page' => $input['per_page'] ?? 20,
-					'paged'          => $input['page'] ?? 1,
+					'posts_per_page' => $pagination['per_page'],
+					'paged'          => $pagination['page'],
 					'orderby'        => $input['orderby'] ?? 'menu_order',
 					'order'          => $input['order'] ?? 'ASC',
 				);
@@ -935,6 +972,7 @@ function mcp_register_content_abilities(): void {
 					'author_name'    => array( 'type' => 'string' ),
 					'featured_image' => array( 'type' => 'string' ),
 					'link'           => array( 'type' => 'string' ),
+					'message'        => array( 'type' => 'string' ),
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
@@ -979,6 +1017,7 @@ function mcp_register_content_abilities(): void {
 					'author_name'    => $author ? $author->display_name : '',
 					'featured_image' => $thumbnail ?: '',
 					'link'           => get_permalink( $page->ID ),
+					'message'        => 'Page retrieved successfully',
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -1960,11 +1999,12 @@ function mcp_register_content_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
+				$pagination = mcp_expose_parse_pagination( $input, 20, 100 );
 				$args = array(
 					'post_type'      => 'attachment',
 					'post_status'    => 'inherit',
-					'posts_per_page' => $input['per_page'] ?? 20,
-					'paged'          => $input['page'] ?? 1,
+					'posts_per_page' => $pagination['per_page'],
+					'paged'          => $pagination['page'],
 					'orderby'        => 'date',
 					'order'          => 'DESC',
 				);
@@ -2054,9 +2094,10 @@ function mcp_register_content_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
+				$pagination = mcp_expose_parse_pagination( $input, 20, 100 );
 				$args = array(
-					'number' => $input['per_page'] ?? 20,
-					'paged'  => $input['page'] ?? 1,
+					'number' => $pagination['per_page'],
+					'paged'  => $pagination['page'],
 				);
 
 				if ( ! empty( $input['role'] ) ) {
@@ -2365,6 +2406,10 @@ function mcp_register_content_abilities(): void {
 					return array( 'success' => false, 'message' => 'Plugin URL is required' );
 				}
 
+				if ( ! function_exists( 'download_url' ) ) {
+					require_once ABSPATH . 'wp-admin/includes/file.php';
+				}
+
 				// Download the zip file.
 				$download_file = download_url( $input['url'] );
 				if ( is_wp_error( $download_file ) ) {
@@ -2599,6 +2644,13 @@ function mcp_register_content_abilities(): void {
 				// Check if plugin is active.
 				if ( is_plugin_active( $plugin_file ) ) {
 					return array( 'success' => false, 'message' => 'Cannot delete active plugin. Deactivate it first.' );
+				}
+
+				if ( ! function_exists( 'request_filesystem_credentials' ) ) {
+					require_once ABSPATH . 'wp-admin/includes/file.php';
+				}
+				if ( ! function_exists( 'delete_plugins' ) ) {
+					require_once ABSPATH . 'wp-admin/includes/plugin.php';
 				}
 
 				// Delete the plugin.
@@ -3593,9 +3645,10 @@ function mcp_register_content_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
+				$pagination = mcp_expose_parse_pagination( $input, 20, 100 );
 				$args = array(
-					'number'  => $input['per_page'] ?? 20,
-					'paged'   => $input['page'] ?? 1,
+					'number'  => $pagination['per_page'],
+					'paged'   => $pagination['page'],
 					'orderby' => $input['orderby'] ?? 'display_name',
 					'order'   => $input['order'] ?? 'ASC',
 				);
@@ -3621,13 +3674,11 @@ function mcp_register_content_abilities(): void {
 				}
 
 				$total = $query->get_total();
-				$per_page = $input['per_page'] ?? 20;
-
 				return array(
 					'success'     => true,
 					'users'       => $users,
 					'total'       => $total,
-					'total_pages' => (int) ceil( $total / $per_page ),
+					'total_pages' => (int) ceil( $total / $pagination['per_page'] ),
 				);
 			},
 			'permission_callback' => function (): bool {
