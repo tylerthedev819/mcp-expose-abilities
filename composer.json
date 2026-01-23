@@ -1,0 +1,16 @@
+{
+    "name": "tylerthedev819/mcp-expose-abilities",
+    "description": "Let AI assistants edit your WordPress site. 54 abilities for content, menus, users, media, Elementor, and more.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Devenia",
+            "homepage": "https://devenia.com"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "composer/installers": "^1.0 || ^2.0"
+    }
+}
