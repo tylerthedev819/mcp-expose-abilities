@@ -3,8 +3,8 @@
  * Plugin Name: MCP Expose Abilities
  * Plugin URI: https://devenia.com
  * Description: Core WordPress abilities for MCP. Content, menus, users, media, widgets, plugins, options, and system management. Add-on plugins available for Elementor, GeneratePress, Cloudflare, and filesystem operations.
- * Version: 3.0.14
- * Author: Devenia
+ * Version: 3.0.17
+ * Author: Bjorn Solstad
  * Author URI: https://devenia.com
  * License: GPL-2.0+
  * License URI: http://www.gnu.org/licenses/gpl-2.0.txt
@@ -21,6 +21,259 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// ============================================================================
+// PLUGIN STRUCTURE INDEX
+// Use this map to quickly find abilities and functions.
+// ============================================================================
+//
+// CONSTANTS (After include guards, ~Line 138)
+//   'mcp-expose-abilities'                      - Plugin text domain
+//   MCP_VERSION                          - Plugin version
+//   MCP_SCHEMA_PAGINATION                - Pagination schema
+//   MCP_SCHEMA_ORDER                     - Orderby/order schema
+//   MCP_SCHEMA_STATUS                    - Status filter schema
+//   MCP_SCHEMA_POST_OUTPUT               - Post output fields schema
+//   MCP_SCHEMA_POST_TYPE                 - Post type parameter schema
+//   MCP_SCHEMA_AUTHOR                    - Author ID schema
+//   MCP_SCHEMA_SEARCH                    - Search parameter schema
+//   MCP_SCHEMA_SUCCESS_MESSAGE           - Success response schema
+//   MCP_SCHEMA_PLUGIN_FILE               - Plugin file parameter schema
+//   MCP_SCHEMA_USER_ID                   - User ID schema
+//   MCP_SCHEMA_MENU_ID                   - Menu ID schema
+//   MCP_SCHEMA_MEDIA_ID                  - Media ID schema
+//   MCP_SCHEMA_TITLE                     - Title parameter schema
+//   MCP_SCHEMA_CONTENT                   - Content parameter schema
+//
+// HELPER CLASSES & FUNCTIONS (~Line 482)
+//   class MCP_Helper                     - Centralized helpers:
+//     - validate_required()              - Validate required params
+//     - get_cached()                     - Get/cache expensive operations
+//     - format_post()                    - Format post for output
+//     - format_user()                    - Format user for output
+//     - format_media()                   - Format media for output
+//     - check_capability()               - Check with error response
+//     - success()                        - Create success response
+//     - error()                          - Create error response
+//   mcp_expose_install_plugin_zip()      Line 286   - Install plugin from zip
+//   mcp_expose_all_abilities()           Line 433   - Filter: Add MCP metadata
+//   mcp_expose_parse_pagination()        Line 469   - Parse per_page/page params
+//   mcp_get_optimized_query_args()       Line 667   - Get optimized WP_Query args
+//
+// ABILITIES BY CATEGORY
+//
+// CONTENT (Posts, Pages, Revisions, Search)
+//   content/list-posts                  Line 720   - List posts with filters
+//   content/get-post                    Line 878   - Get single post by ID/slug
+//   content/create-post                 Line 987   - Create new post
+//   content/update-post                 Line 1117  - Update existing post
+//   content/delete-post                 Line 1255  - Delete/trash post
+//   content/list-pages                  Line 1328  - List pages
+//   content/get-page                    Line 1442  - Get single page
+//   content/create-page                 Line 1545  - Create new page
+//   content/update-page                 Line 1661  - Update existing page
+//   content/delete-page                 Line 1797  - Delete/trash page
+//   content/list-revisions              Line 1864  - List post revisions
+//   content/get-revision                Line 1944  - Get single revision
+//   content/patch-page                  Line 2014  - Quick page edit
+//   content/list-categories             Line 2140  - List categories
+//   content/create-category             Line 2209  - Create category
+//   content/list-tags                   Line 2308  - List tags
+//   content/create-tag                  Line 2374  - Create tag
+//   content/list-media                  Line 2466  - List media attachments
+//   content/list-users                  Line 2566  - List users
+//   content/patch-post                  Line 2655  - Quick post edit
+//   content/search                      Line 2794  - Search posts/pages
+//
+// PLUGINS
+//   plugins/upload                      Line 2880  - Install from zip file
+//   plugins/upload-base64               Line 2951  - Install from base64
+//   plugins/list                        Line 3040  - List all plugins
+//   plugins/delete                      Line 3114  - Delete plugin
+//   plugins/activate                    Line 3186  - Activate plugin
+//   plugins/deactivate                  Line 3255  - Deactivate plugin
+//
+// MENUS
+//   menus/list                          Line 3326  - List all menus
+//   menus/get-items                     Line 3391  - List menu items
+//
+// WIDGETS
+//   widgets/list-sidebars               Line 3488  - List registered sidebars
+//
+// ============================================================================
+
+// ============================================================================
+// Centralized WordPress Admin Include Guards
+// Prevents redundant require_once calls throughout the file.
+// ============================================================================
+if ( ! function_exists( 'WP_Filesystem' ) ) {
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+}
+if ( ! function_exists( 'plugins_api' ) ) {
+	require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
+}
+if ( ! class_exists( 'Plugin_Upgrader', false ) ) {
+	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+}
+if ( ! function_exists( 'activate_plugin' ) ) {
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+}
+if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
+	require_once ABSPATH . 'wp-admin/includes/media.php';
+	require_once ABSPATH . 'wp-admin/includes/image.php';
+}
+if ( ! function_exists( 'wp_create_user' ) ) {
+	require_once ABSPATH . 'wp-admin/includes/user.php';
+}
+// ============================================================================
+
+// ============================================================================
+// PLUGIN CONSTANTS
+// ============================================================================
+define('MCP_TEXT_DOMAIN', 'mcp-expose-abilities');
+define('MCP_VERSION', '3.0.17');
+
+// ============================================================================
+// REUSABLE SCHEMA DEFINITIONS
+// These reduce schema duplication across abilities.
+// ============================================================================
+
+// Common pagination parameters.
+define('MCP_SCHEMA_PAGINATION', array(
+	'per_page' => array(
+		'description' => 'Number of items per page',
+		'type'        => 'integer',
+		'minimum'     => 1,
+		'maximum'     => 100,
+		'default'     => 20,
+	),
+	'page' => array(
+		'description' => 'Page number',
+		'type'        => 'integer',
+		'minimum'     => 1,
+		'default'     => 1,
+	),
+));
+
+// Common post order parameters.
+define('MCP_SCHEMA_ORDER', array(
+	'orderby' => array(
+		'description' => 'Sort field',
+		'type'        => 'string',
+		'enum'        => array('date', 'title', 'name', 'ID', 'modified', 'menu_order'),
+		'default'     => 'date',
+	),
+	'order' => array(
+		'description' => 'Sort order',
+		'type'        => 'string',
+		'enum'        => array('ASC', 'DESC'),
+		'default'     => 'DESC',
+	),
+));
+
+// Common status filter.
+define('MCP_SCHEMA_STATUS', array(
+	'status' => array(
+		'description' => 'Post status filter',
+		'type'        => 'string',
+		'enum'        => array('publish', 'draft', 'pending', 'private', 'trash', 'any'),
+		'default'     => 'publish',
+	),
+));
+
+// Common output fields for post-like objects.
+define('MCP_SCHEMA_POST_OUTPUT', array(
+	'id'       => array('type' => 'integer'),
+	'title'    => array('type' => 'string'),
+	'slug'     => array('type' => 'string'),
+	'status'   => array('type' => 'string'),
+	'date'     => array('type' => 'string', 'format' => 'date-time'),
+	'modified' => array('type' => 'string', 'format' => 'date-time'),
+	'link'     => array('type' => 'string', 'format' => 'uri'),
+));
+
+// Post type parameter.
+define('MCP_SCHEMA_POST_TYPE', array(
+	'post_type' => array(
+		'description' => 'Post type to query',
+		'type'        => 'string',
+		'default'     => 'post',
+	),
+));
+
+// Author ID parameter.
+define('MCP_SCHEMA_AUTHOR', array(
+	'author_id' => array(
+		'description' => 'Filter by author ID',
+		'type'        => 'integer',
+	),
+));
+
+// Search parameter.
+define('MCP_SCHEMA_SEARCH', array(
+	'search' => array(
+		'description' => 'Search keyword',
+		'type'        => 'string',
+	),
+));
+
+// Success output with message.
+define('MCP_SCHEMA_SUCCESS_MESSAGE', array(
+	'success' => array('type' => 'boolean'),
+	'message' => array('type' => 'string'),
+));
+
+// Plugin file parameter.
+define('MCP_SCHEMA_PLUGIN_FILE', array(
+	'plugin' => array(
+		'description' => 'Plugin file (directory/main-file.php)',
+		'type'        => 'string',
+	),
+));
+
+// User ID parameter.
+define('MCP_SCHEMA_USER_ID', array(
+	'id' => array(
+		'description' => 'User ID',
+		'type'        => 'integer',
+	),
+));
+
+// Menu ID parameter.
+define('MCP_SCHEMA_MENU_ID', array(
+	'menu_id' => array(
+		'description' => 'Menu ID',
+		'type'        => 'integer',
+	),
+));
+
+// Media ID parameter.
+define('MCP_SCHEMA_MEDIA_ID', array(
+	'id' => array(
+		'description' => 'Media/Attachment ID',
+		'type'        => 'integer',
+	),
+));
+
+// Title parameter.
+define('MCP_SCHEMA_TITLE', array(
+	'title' => array(
+		'description' => 'Title',
+		'type'        => 'string',
+	),
+));
+
+// Content parameter.
+define('MCP_SCHEMA_CONTENT', array(
+	'content' => array(
+		'description' => 'Content',
+		'type'        => 'string',
+	),
+));
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
 /**
  * Install a plugin from a local zip file path.
  *
@@ -31,20 +284,15 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array {
 	if ( empty( $zip_path ) || ! file_exists( $zip_path ) ) {
-		return array( 'success' => false, 'message' => 'Plugin zip file not found' );
+		return array( 'success' => false, 'message' => esc_html__( 'Plugin zip file not found', 'mcp-expose-abilities' ) );
 	}
 
-	// Include required WordPress files for plugin installation.
 	// Define stub for get_current_screen() if not available (REST API context).
 	if ( ! function_exists( 'get_current_screen' ) ) {
 		function get_current_screen() {
 			return null;
 		}
 	}
-	require_once ABSPATH . 'wp-admin/includes/file.php';
-	require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
-	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-	require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
 	// Prepare for unzipping.
 	WP_Filesystem();
@@ -59,7 +307,8 @@ function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array 
 		if ( $wp_filesystem ) {
 			$wp_filesystem->delete( $temp_dir, true );
 		}
-		return array( 'success' => false, 'message' => 'Unzip failed: ' . $unzip_result->get_error_message() );
+		/* translators: %s: Error message from WordPress */
+		return array( 'success' => false, 'message' => esc_html__( 'Unzip failed: ', 'mcp-expose-abilities' ) . esc_html( $unzip_result->get_error_message() ) );
 	}
 
 	// Find the plugin folder (first directory in the zip).
@@ -68,7 +317,7 @@ function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array 
 		if ( $wp_filesystem ) {
 			$wp_filesystem->delete( $temp_dir, true );
 		}
-		return array( 'success' => false, 'message' => 'Invalid plugin zip - no files found' );
+		return array( 'success' => false, 'message' => esc_html__( 'Invalid plugin zip - no files found', 'mcp-expose-abilities' ) );
 	}
 
 	$plugin_folder = '';
@@ -82,12 +331,17 @@ function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array 
 	if ( empty( $plugin_folder ) ) {
 		$found_items = array();
 		foreach ( $files as $file => $info ) {
+			/* translators: %1$s: File name, %2$s: File type */
 			$found_items[] = $file . ' (type: ' . $info['type'] . ')';
 		}
 		if ( $wp_filesystem ) {
 			$wp_filesystem->delete( $temp_dir, true );
 		}
-		return array( 'success' => false, 'message' => 'Invalid plugin zip - no plugin folder found. Found: ' . implode( ', ', $found_items ) );
+		return array(
+			'success' => false,
+			/* translators: %s: List of found items */
+			'message' => esc_html__( 'Invalid plugin zip - no plugin folder found. Found: ', 'mcp-expose-abilities' ) . esc_html( implode( ', ', $found_items ) ),
+		);
 	}
 
 	$target_dir  = $plugins_dir . '/' . $plugin_folder;
@@ -100,7 +354,7 @@ function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array 
 			if ( $wp_filesystem ) {
 				$wp_filesystem->delete( $temp_dir, true );
 			}
-			return array( 'success' => false, 'message' => 'Plugin already exists and overwrite is disabled' );
+			return array( 'success' => false, 'message' => esc_html__( 'Plugin already exists and overwrite is disabled', 'mcp-expose-abilities' ) );
 		}
 		// Deactivate if active before overwriting.
 		$all_plugins = get_plugins();
@@ -126,7 +380,7 @@ function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array 
 	}
 
 	if ( ! $move_result ) {
-		return array( 'success' => false, 'message' => 'Failed to move plugin to plugins directory' );
+		return array( 'success' => false, 'message' => esc_html__( 'Failed to move plugin to plugins directory', 'mcp-expose-abilities' ) );
 	}
 
 	// Find the main plugin file if not already known.
@@ -141,7 +395,7 @@ function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array 
 	}
 
 	if ( empty( $plugin_file ) ) {
-		return array( 'success' => false, 'message' => 'Plugin installed but main file not found' );
+		return array( 'success' => false, 'message' => esc_html__( 'Plugin installed but main file not found', 'mcp-expose-abilities' ) );
 	}
 
 	// Activate if requested.
@@ -151,7 +405,8 @@ function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array 
 		if ( is_wp_error( $activate_result ) ) {
 			return array(
 				'success'   => true,
-				'message'   => 'Plugin installed but activation failed: ' . $activate_result->get_error_message(),
+				/* translators: %s: Error message from WordPress */
+				'message'   => esc_html__( 'Plugin installed but activation failed: ', 'mcp-expose-abilities' ) . esc_html( $activate_result->get_error_message() ),
 				'plugin'    => $plugin_file,
 				'activated' => false,
 			);
@@ -161,7 +416,9 @@ function mcp_expose_install_plugin_zip( string $zip_path, array $input ): array 
 
 	return array(
 		'success'   => true,
-		'message'   => 'Plugin installed successfully' . ( $activated ? ' and activated' : '' ),
+		'message'   => $activated
+			? esc_html__( 'Plugin installed successfully and activated', 'mcp-expose-abilities' )
+			: esc_html__( 'Plugin installed successfully', 'mcp-expose-abilities' ),
 		'plugin'    => $plugin_file,
 		'activated' => $activated,
 	);
@@ -213,6 +470,208 @@ function mcp_expose_parse_pagination( array $input, int $default_per_page, int $
 	);
 }
 
+// ============================================================================
+// CENTRALIZED HELPER CLASS
+// Provides validation, caching, and response helpers.
+// ============================================================================
+
+/**
+ * Helper class for MCP abilities.
+ * Provides centralized methods for validation, caching, and response formatting.
+ */
+class MCP_Helper {
+
+	/**
+	 * Validate required parameters.
+	 *
+	 * @param array       $input      Input data.
+	 * @param array       $required   Required parameter names.
+	 * @param string|null $error_code Error code to return.
+	 * @return array|null WP_Error or null if valid.
+	 */
+	public static function validate_required( array $input, array $required, ?string $error_code = null ): ?array {
+		$missing = array();
+		foreach ( $required as $param ) {
+			if ( empty( $input[ $param ] ) ) {
+				$missing[] = $param;
+			}
+		}
+		if ( ! empty( $missing ) ) {
+			$code = $error_code ?? 'missing_params';
+			return array(
+				'success' => false,
+				/* translators: %s: Missing parameter names */
+				'message' => esc_html( sprintf( __( 'Missing required parameter(s): %s', 'mcp-expose-abilities' ), implode( ', ', $missing ) ) ),
+			);
+		}
+		return null;
+	}
+
+	/**
+	 * Get cached result or compute and cache.
+	 *
+	 * @param string   $cache_key  Cache key.
+	 * @param callable $callback   Function to call if cache miss.
+	 * @param string   $cache_group Cache group.
+	 * @param int      $expires    Expiration in seconds.
+	 * @return mixed Cached or computed result.
+	 */
+	public static function get_cached( string $cache_key, callable $callback, string $cache_group = 'mcp', int $expires = 300 ) {
+		$result = wp_cache_get( $cache_key, $cache_group );
+		if ( false === $result ) {
+			$result = $callback();
+			if ( ! is_wp_error( $result ) ) {
+				wp_cache_set( $cache_key, $result, $cache_group, $expires );
+			}
+		}
+		return $result;
+	}
+
+	/**
+	 * Invalidate cache by group.
+	 *
+	 * @param string $pattern Cache key pattern (supports % wildcards).
+	 * @param string $group   Cache group.
+	 */
+	public static function invalidate_cache( string $pattern, string $group = 'mcp' ): void {
+		// WordPress cache doesn't support pattern deletion.
+		// For now, just note this limitation.
+		// In production, consider using Redis with SCAN command.
+	}
+
+	/**
+	 * Format post for output.
+	 *
+	 * @param WP_Post $post Post object.
+	 * @param array   $extra Extra fields to include.
+	 * @return array Formatted post data.
+	 */
+	public static function format_post( WP_Post $post, array $extra = array() ): array {
+		$data = array(
+			'id'       => $post->ID,
+			'title'    => $post->post_title,
+			'slug'     => $post->post_name,
+			'status'   => $post->post_status,
+			'date'     => $post->post_date,
+			'modified' => $post->post_modified,
+			'link'     => get_permalink( $post->ID ),
+		);
+		return array_merge( $data, $extra );
+	}
+
+	/**
+	 * Format user for output.
+	 *
+	 * @param WP_User $user User object.
+	 * @param array   $extra Extra fields to include.
+	 * @return array Formatted user data.
+	 */
+	public static function format_user( WP_User $user, array $extra = array() ): array {
+		$data = array(
+			'id'           => $user->ID,
+			'username'     => $user->user_login,
+			'email'        => $user->user_email,
+			'display_name' => $user->display_name,
+			'first_name'   => $user->first_name,
+			'last_name'    => $user->last_name,
+			'roles'        => $user->roles,
+		);
+		return array_merge( $data, $extra );
+	}
+
+	/**
+	 * Format media item for output.
+	 *
+	 * @param WP_Post $attachment Attachment post object.
+	 * @return array Formatted media data.
+	 */
+	public static function format_media( WP_Post $attachment ): array {
+		return array(
+			'id'        => $attachment->ID,
+			'title'     => $attachment->post_title,
+			'filename'  => basename( get_attached_file( $attachment->ID ) ),
+			'mime_type' => $attachment->post_mime_type,
+			'url'       => wp_get_attachment_url( $attachment->ID ),
+			'date'      => $attachment->post_date,
+			'alt_text'  => get_post_meta( $attachment->ID, '_wp_attachment_image_alt', true ),
+		);
+	}
+
+	/**
+	 * Check capability with fallback.
+	 *
+	 * @param string $cap   Capability to check.
+	 * @param mixed  $args  Additional arguments for cap check.
+	 * @param string $error_message Error message if denied.
+	 * @return array|null WP_Error if denied, null if allowed.
+	 */
+	public static function check_capability( string $cap, $args = null, string $error_message = 'Permission denied' ): ?array {
+		if ( ! current_user_can( $cap, $args ) ) {
+			return array(
+				'success' => false,
+				'message' => esc_html( $error_message ),
+			);
+		}
+		return null;
+	}
+
+	/**
+	 * Create success response.
+	 *
+	 * @param string $message Success message.
+	 * @param array  $extra   Extra data to include.
+	 * @return array Response array.
+	 */
+	public static function success( string $message, array $extra = array() ): array {
+		return array_merge(
+			array( 'success' => true, 'message' => esc_html( $message ) ),
+			$extra
+		);
+	}
+
+	/**
+	 * Create error response.
+	 *
+	 * @param string|WP_Error $error Error message or WP_Error object.
+	 * @param string          $prefix Optional prefix.
+	 * @return array Response array.
+	 */
+	public static function error( $error, string $prefix = '' ): array {
+		$message = $error instanceof WP_Error
+			? $error->get_error_message()
+			: $error;
+		return array(
+			'success' => false,
+			'message' => esc_html( $prefix . $message ),
+		);
+	}
+}
+
+/**
+ * Get optimized WP_Query arguments.
+ *
+ * @param array $args Base arguments (post_type, post_status, etc.).
+ * @param array $pagination Pagination params (per_page, page).
+ * @param array $options Additional options (orderby, order, search, etc.).
+ * @return array Full WP_Query arguments with performance optimizations.
+ */
+function mcp_get_optimized_query_args( array $args, array $pagination = array(), array $options = array() ): array {
+	$defaults = array(
+		'posts_per_page'         => $pagination['per_page'] ?? 20,
+		'paged'                  => $pagination['page'] ?? 1,
+		// Performance optimizations.
+		'no_found_rows'          => true,
+		'update_post_term_cache' => false,
+		'update_post_meta_cache' => false,
+	);
+
+	return array_merge( $defaults, $args, $options );
+}
+
+// ============================================================================
+// REGISTER ABILITY CATEGORIES
+// ============================================================================
+
 /**
  * Register content management abilities.
  */
@@ -246,6 +705,11 @@ function mcp_register_content_abilities(): void {
 						'minimum'     => 1,
 						'maximum'     => 100,
 						'description' => 'Number of posts to return.',
+					),
+					'include_totals' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'Include total counts (disables no_found_rows optimization).',
 					),
 					'page'        => array(
 						'type'        => 'integer',
@@ -299,26 +763,34 @@ function mcp_register_content_abilities(): void {
 							),
 						),
 					),
-					'total'       => array( 'type' => 'integer' ),
-					'total_pages' => array( 'type' => 'integer' ),
+					'returned'    => array( 'type' => 'integer' ),
+					'has_more'    => array( 'type' => 'boolean' ),
+					'total'       => array( 'type' => array( 'integer', 'null' ) ),
+					'total_pages' => array( 'type' => array( 'integer', 'null' ) ),
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
 				$pagination = mcp_expose_parse_pagination( $input, 10, 100 );
+				$include_totals = ! empty( $input['include_totals'] );
 				$post_type = sanitize_key( $input['post_type'] ?? 'post' );
 				if ( ! post_type_exists( $post_type ) ) {
-					return array( 'success' => false, 'message' => 'Invalid post_type: ' . $post_type );
+					/* translators: %s: Post type name */
+					return array( 'success' => false, 'message' => esc_html__( 'Invalid post_type: ', 'mcp-expose-abilities' ) . esc_html( $post_type ) );
 				}
 
 				$args = array(
-					'post_type'      => $post_type,
-					'post_status'    => $input['status'] ?? 'publish',
-					'posts_per_page' => $pagination['per_page'],
-					'paged'          => $pagination['page'],
-					'orderby'        => $input['orderby'] ?? 'date',
-					'order'          => $input['order'] ?? 'DESC',
+					'post_type'              => $post_type,
+					'post_status'            => $input['status'] ?? 'publish',
+					'posts_per_page'         => $pagination['per_page'],
+					'paged'                  => $pagination['page'],
+					'orderby'                => $input['orderby'] ?? 'date',
+					'order'                  => $input['order'] ?? 'DESC',
+					// Performance optimizations.
+					'no_found_rows'          => ! $include_totals,
+					'update_post_term_cache' => false,
+					'update_post_meta_cache' => false,
 				);
 
 				if ( 'any' === $args['post_status'] ) {
@@ -351,10 +823,19 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
+				$returned = count( $posts );
+				$total = $include_totals ? (int) $query->found_posts : null;
+				$total_pages = $include_totals ? (int) $query->max_num_pages : null;
+				$has_more = $include_totals
+					? $pagination['page'] < (int) $query->max_num_pages
+					: $returned === $pagination['per_page'];
+
 				return array(
 					'posts'       => $posts,
-					'total'       => (int) $query->found_posts,
-					'total_pages' => (int) $query->max_num_pages,
+					'returned'    => $returned,
+					'has_more'    => $has_more,
+					'total'       => $total,
+					'total_pages' => $total_pages,
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -431,11 +912,11 @@ function mcp_register_content_abilities(): void {
 				}
 
 				if ( ! $post ) {
-					return array( 'success' => false, 'message' => 'Post not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'read_post', $post->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied', 'mcp-expose-abilities' ) );
 				}
 
 				$categories = wp_get_post_categories( $post->ID, array( 'fields' => 'all' ) );
@@ -548,13 +1029,13 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['title'] ) ) {
-					return array( 'success' => false, 'message' => 'Title is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Title is required', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! empty( $input['author_id'] ) ) {
 					$author_id = intval( $input['author_id'] );
 					if ( $author_id !== get_current_user_id() && ! current_user_can( 'edit_others_posts' ) ) {
-						return array( 'success' => false, 'message' => 'Permission denied to set a different author.' );
+						return array( 'success' => false, 'message' => esc_html__( 'Permission denied to set a different author.', 'mcp-expose-abilities' ) );
 					}
 				}
 
@@ -579,7 +1060,7 @@ function mcp_register_content_abilities(): void {
 				$post_id = wp_insert_post( $post_data, true );
 
 				if ( is_wp_error( $post_id ) ) {
-					return array( 'success' => false, 'message' => $post_id->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $post_id->get_error_message() ) );
 				}
 
 				if ( ! empty( $input['category_ids'] ) ) {
@@ -593,7 +1074,7 @@ function mcp_register_content_abilities(): void {
 					'success' => true,
 					'id'      => $post_id,
 					'link'    => get_permalink( $post_id ),
-					'message' => 'Post created successfully',
+					'message' => esc_html__( 'Post created successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -677,16 +1158,16 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Post ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$post = get_post( $input['id'] );
 				if ( ! $post ) {
-					return array( 'success' => false, 'message' => 'Post not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'edit_post', $post->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to edit this post.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to edit this post.', 'mcp-expose-abilities' ) );
 				}
 
 				$post_data = array( 'ID' => $input['id'] );
@@ -709,7 +1190,7 @@ function mcp_register_content_abilities(): void {
 				if ( isset( $input['author_id'] ) ) {
 					$author_id = intval( $input['author_id'] );
 					if ( $author_id !== get_current_user_id() && ! current_user_can( 'edit_others_posts' ) ) {
-						return array( 'success' => false, 'message' => 'Permission denied to change the author.' );
+						return array( 'success' => false, 'message' => esc_html__( 'Permission denied to change the author.', 'mcp-expose-abilities' ) );
 					}
 					$post_data['post_author'] = $author_id;
 				}
@@ -717,7 +1198,7 @@ function mcp_register_content_abilities(): void {
 				$result = wp_update_post( $post_data, true );
 
 				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'message' => $result->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $result->get_error_message() ) );
 				}
 
 				if ( isset( $input['category_ids'] ) ) {
@@ -731,7 +1212,7 @@ function mcp_register_content_abilities(): void {
 					'success' => true,
 					'id'      => $input['id'],
 					'link'    => get_permalink( $input['id'] ),
-					'message' => 'Post updated successfully',
+					'message' => esc_html__( 'Post updated successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -783,28 +1264,28 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Post ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$post = get_post( $input['id'] );
 				if ( ! $post ) {
-					return array( 'success' => false, 'message' => 'Post not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'delete_post', $post->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to delete this post.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to delete this post.', 'mcp-expose-abilities' ) );
 				}
 
 				$force  = ! empty( $input['force'] );
 				$result = wp_delete_post( $input['id'], $force );
 
 				if ( ! $result ) {
-					return array( 'success' => false, 'message' => 'Failed to delete post' );
+					return array( 'success' => false, 'message' => esc_html__( 'Failed to delete post', 'mcp-expose-abilities' ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => $force ? 'Post permanently deleted' : 'Post moved to trash',
+					'message' => $force ? esc_html__( 'Post permanently deleted', 'mcp-expose-abilities' ) : esc_html__( 'Post moved to trash', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -843,6 +1324,11 @@ function mcp_register_content_abilities(): void {
 						'minimum' => 1,
 						'maximum' => 100,
 					),
+					'include_totals' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'Include total counts (disables no_found_rows optimization).',
+					),
 					'page'     => array(
 						'type'    => 'integer',
 						'default' => 1,
@@ -869,21 +1355,28 @@ function mcp_register_content_abilities(): void {
 				'type'       => 'object',
 				'properties' => array(
 					'pages'       => array( 'type' => 'array' ),
-					'total'       => array( 'type' => 'integer' ),
-					'total_pages' => array( 'type' => 'integer' ),
+					'returned'    => array( 'type' => 'integer' ),
+					'has_more'    => array( 'type' => 'boolean' ),
+					'total'       => array( 'type' => array( 'integer', 'null' ) ),
+					'total_pages' => array( 'type' => array( 'integer', 'null' ) ),
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
 				$pagination = mcp_expose_parse_pagination( $input, 20, 100 );
+				$include_totals = ! empty( $input['include_totals'] );
 				$args = array(
-					'post_type'      => 'page',
-					'post_status'    => $input['status'] ?? 'publish',
-					'posts_per_page' => $pagination['per_page'],
-					'paged'          => $pagination['page'],
-					'orderby'        => $input['orderby'] ?? 'menu_order',
-					'order'          => $input['order'] ?? 'ASC',
+					'post_type'              => 'page',
+					'post_status'            => $input['status'] ?? 'publish',
+					'posts_per_page'         => $pagination['per_page'],
+					'paged'                  => $pagination['page'],
+					'orderby'                => $input['orderby'] ?? 'menu_order',
+					'order'                  => $input['order'] ?? 'ASC',
+					// Performance optimizations.
+					'no_found_rows'          => ! $include_totals,
+					'update_post_term_cache' => false,
+					'update_post_meta_cache' => false,
 				);
 
 				if ( 'any' === $args['post_status'] ) {
@@ -911,10 +1404,19 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
+				$returned = count( $pages );
+				$total = $include_totals ? (int) $query->found_posts : null;
+				$total_pages = $include_totals ? (int) $query->max_num_pages : null;
+				$has_more = $include_totals
+					? $pagination['page'] < (int) $query->max_num_pages
+					: $returned === $pagination['per_page'];
+
 				return array(
 					'pages'       => $pages,
-					'total'       => (int) $query->found_posts,
-					'total_pages' => (int) $query->max_num_pages,
+					'returned'    => $returned,
+					'has_more'    => $has_more,
+					'total'       => $total,
+					'total_pages' => $total_pages,
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -989,11 +1491,11 @@ function mcp_register_content_abilities(): void {
 				}
 
 				if ( ! $page ) {
-					return array( 'success' => false, 'message' => 'Page not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Page not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'read_post', $page->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied', 'mcp-expose-abilities' ) );
 				}
 
 				$author    = get_user_by( 'id', $page->post_author );
@@ -1096,7 +1598,7 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['title'] ) ) {
-					return array( 'success' => false, 'message' => 'Title is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Title is required', 'mcp-expose-abilities' ) );
 				}
 
 				$page_data = array(
@@ -1122,7 +1624,7 @@ function mcp_register_content_abilities(): void {
 				$page_id = wp_insert_post( $page_data, true );
 
 				if ( is_wp_error( $page_id ) ) {
-					return array( 'success' => false, 'message' => $page_id->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $page_id->get_error_message() ) );
 				}
 
 				if ( ! empty( $input['template'] ) ) {
@@ -1133,7 +1635,7 @@ function mcp_register_content_abilities(): void {
 					'success' => true,
 					'id'      => $page_id,
 					'link'    => get_permalink( $page_id ),
-					'message' => 'Page created successfully',
+					'message' => esc_html__( 'Page created successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -1215,20 +1717,20 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Page ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Page ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$page = get_post( $input['id'] );
 				if ( ! $page || 'page' !== $page->post_type ) {
-					return array( 'success' => false, 'message' => 'Page not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Page not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'delete_post', $page->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to delete this page.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to delete this page.', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'edit_post', $page->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to edit this page.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to edit this page.', 'mcp-expose-abilities' ) );
 				}
 
 				$page_data = array( 'ID' => $input['id'] );
@@ -1258,7 +1760,7 @@ function mcp_register_content_abilities(): void {
 				$result = wp_update_post( $page_data, true );
 
 				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'message' => $result->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $result->get_error_message() ) );
 				}
 
 				if ( isset( $input['template'] ) ) {
@@ -1269,7 +1771,7 @@ function mcp_register_content_abilities(): void {
 					'success' => true,
 					'id'      => $input['id'],
 					'link'    => get_permalink( $input['id'] ),
-					'message' => 'Page updated successfully',
+					'message' => esc_html__( 'Page updated successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -1321,22 +1823,22 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Page ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Page ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$page = get_post( $input['id'] );
 				if ( ! $page || 'page' !== $page->post_type ) {
-					return array( 'success' => false, 'message' => 'Page not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Page not found', 'mcp-expose-abilities' ) );
 				}
 
 				$force  = ! empty( $input['force'] );
 				$result = wp_delete_post( $input['id'], $force );
 
 				if ( ! $result ) {
-					return array( 'success' => false, 'message' => 'Failed to delete page' );
+					return array( 'success' => false, 'message' => esc_html__( 'Failed to delete page', 'mcp-expose-abilities' ) );
 				}
 
-				$message = $force ? 'Page permanently deleted' : 'Page moved to trash';
+				$message = $force ? esc_html__( 'Page permanently deleted', 'mcp-expose-abilities' ) : esc_html__( 'Page moved to trash', 'mcp-expose-abilities' );
 				return array( 'success' => true, 'message' => $message );
 			},
 			'permission_callback' => function (): bool {
@@ -1390,12 +1892,12 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Post/Page ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post/Page ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$post = get_post( $input['id'] );
 				if ( ! $post ) {
-					return array( 'success' => false, 'message' => 'Post not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post not found', 'mcp-expose-abilities' ) );
 				}
 
 				$per_page  = $input['per_page'] ?? 10;
@@ -1468,12 +1970,12 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Revision ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Revision ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$revision = get_post( $input['id'] );
 				if ( ! $revision || 'revision' !== $revision->post_type ) {
-					return array( 'success' => false, 'message' => 'Revision not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Revision not found', 'mcp-expose-abilities' ) );
 				}
 
 				$author = get_user_by( 'id', $revision->post_author );
@@ -1554,18 +2056,18 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Page ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Page ID is required', 'mcp-expose-abilities' ) );
 				}
 				if ( ! isset( $input['find'] ) || '' === $input['find'] ) {
-					return array( 'success' => false, 'message' => 'Find string is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Find string is required', 'mcp-expose-abilities' ) );
 				}
 				if ( ! isset( $input['replace'] ) ) {
-					return array( 'success' => false, 'message' => 'Replace string is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Replace string is required', 'mcp-expose-abilities' ) );
 				}
 
 				$page = get_post( $input['id'] );
 				if ( ! $page || 'page' !== $page->post_type ) {
-					return array( 'success' => false, 'message' => 'Page not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Page not found', 'mcp-expose-abilities' ) );
 				}
 
 				$content   = $page->post_content;
@@ -1578,7 +2080,7 @@ function mcp_register_content_abilities(): void {
 				if ( $use_regex ) {
 					$new_content = preg_replace( $find, $replace, $content, -1, $count );
 					if ( null === $new_content ) {
-						return array( 'success' => false, 'message' => 'Invalid regex pattern' );
+						return array( 'success' => false, 'message' => esc_html__( 'Invalid regex pattern', 'mcp-expose-abilities' ) );
 					}
 				} else {
 					if ( -1 === $limit ) {
@@ -1604,7 +2106,7 @@ function mcp_register_content_abilities(): void {
 				), true );
 
 				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'message' => $result->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $result->get_error_message() ) );
 				}
 
 				return array(
@@ -1764,12 +2266,12 @@ function mcp_register_content_abilities(): void {
 							'id'      => $existing_term->term_id,
 							'name'    => $existing_term->name,
 							'slug'    => $existing_term->slug,
-							'message' => 'Category already exists.',
+							'message' => esc_html__( 'Category already exists.', 'mcp-expose-abilities' ),
 						);
 					}
 					return array(
 						'success' => false,
-						'message' => $result->get_error_message(),
+						'message' => esc_html( $result->get_error_message() ),
 					);
 				}
 
@@ -1780,7 +2282,7 @@ function mcp_register_content_abilities(): void {
 					'id'      => $term->term_id,
 					'name'    => $term->name,
 					'slug'    => $term->slug,
-					'message' => 'Category created successfully.',
+					'message' => esc_html__( 'Category created successfully.', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -1922,12 +2424,12 @@ function mcp_register_content_abilities(): void {
 							'id'      => $existing_term->term_id,
 							'name'    => $existing_term->name,
 							'slug'    => $existing_term->slug,
-							'message' => 'Tag already exists.',
+							'message' => esc_html__( 'Tag already exists.', 'mcp-expose-abilities' ),
 						);
 					}
 					return array(
 						'success' => false,
-						'message' => $result->get_error_message(),
+						'message' => esc_html( $result->get_error_message() ),
 					);
 				}
 
@@ -1938,7 +2440,7 @@ function mcp_register_content_abilities(): void {
 					'id'      => $term->term_id,
 					'name'    => $term->name,
 					'slug'    => $term->slug,
-					'message' => 'Tag created successfully.',
+					'message' => esc_html__( 'Tag created successfully.', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -1972,6 +2474,11 @@ function mcp_register_content_abilities(): void {
 						'minimum' => 1,
 						'maximum' => 100,
 					),
+					'include_totals' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => 'Include total counts (disables no_found_rows optimization).',
+					),
 					'page'      => array(
 						'type'    => 'integer',
 						'default' => 1,
@@ -1992,21 +2499,28 @@ function mcp_register_content_abilities(): void {
 				'type'       => 'object',
 				'properties' => array(
 					'media'       => array( 'type' => 'array' ),
-					'total'       => array( 'type' => 'integer' ),
-					'total_pages' => array( 'type' => 'integer' ),
+					'returned'    => array( 'type' => 'integer' ),
+					'has_more'    => array( 'type' => 'boolean' ),
+					'total'       => array( 'type' => array( 'integer', 'null' ) ),
+					'total_pages' => array( 'type' => array( 'integer', 'null' ) ),
 				),
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
 				$pagination = mcp_expose_parse_pagination( $input, 20, 100 );
+				$include_totals = ! empty( $input['include_totals'] );
 				$args = array(
-					'post_type'      => 'attachment',
-					'post_status'    => 'inherit',
-					'posts_per_page' => $pagination['per_page'],
-					'paged'          => $pagination['page'],
-					'orderby'        => 'date',
-					'order'          => 'DESC',
+					'post_type'              => 'attachment',
+					'post_status'            => 'inherit',
+					'posts_per_page'         => $pagination['per_page'],
+					'paged'                  => $pagination['page'],
+					'orderby'                => 'date',
+					'order'                  => 'DESC',
+					// Performance optimizations.
+					'no_found_rows'          => ! $include_totals,
+					'update_post_term_cache' => false,
+					'update_post_meta_cache' => false,
 				);
 
 				if ( ! empty( $input['mime_type'] ) ) {
@@ -2031,10 +2545,19 @@ function mcp_register_content_abilities(): void {
 					);
 				}
 
+				$returned = count( $media );
+				$total = $include_totals ? (int) $query->found_posts : null;
+				$total_pages = $include_totals ? (int) $query->max_num_pages : null;
+				$has_more = $include_totals
+					? $pagination['page'] < (int) $query->max_num_pages
+					: $returned === $pagination['per_page'];
+
 				return array(
 					'media'       => $media,
-					'total'       => (int) $query->found_posts,
-					'total_pages' => (int) $query->max_num_pages,
+					'returned'    => $returned,
+					'has_more'    => $has_more,
+					'total'       => $total,
+					'total_pages' => $total_pages,
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -2191,18 +2714,18 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Post ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post ID is required', 'mcp-expose-abilities' ) );
 				}
 				if ( ! isset( $input['find'] ) || '' === $input['find'] ) {
-					return array( 'success' => false, 'message' => 'Find string is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Find string is required', 'mcp-expose-abilities' ) );
 				}
 				if ( ! isset( $input['replace'] ) ) {
-					return array( 'success' => false, 'message' => 'Replace string is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Replace string is required', 'mcp-expose-abilities' ) );
 				}
 
 				$post = get_post( $input['id'] );
 				if ( ! $post ) {
-					return array( 'success' => false, 'message' => 'Post not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Post not found', 'mcp-expose-abilities' ) );
 				}
 
 				$content     = $post->post_content;
@@ -2216,7 +2739,7 @@ function mcp_register_content_abilities(): void {
 					// Regex mode
 					$new_content = preg_replace( $find, $replace, $content, -1, $count );
 					if ( null === $new_content ) {
-						return array( 'success' => false, 'message' => 'Invalid regex pattern' );
+						return array( 'success' => false, 'message' => esc_html__( 'Invalid regex pattern', 'mcp-expose-abilities' ) );
 					}
 				} else {
 					// Plain text mode with optional limit
@@ -2254,7 +2777,7 @@ function mcp_register_content_abilities(): void {
 				);
 
 				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'message' => $result->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $result->get_error_message() ) );
 				}
 
 				return array(
@@ -2325,10 +2848,14 @@ function mcp_register_content_abilities(): void {
 				}
 
 				$query = new WP_Query( array(
-					's'              => $input['query'],
-					'post_type'      => $input['post_types'] ?? array( 'post', 'page' ),
-					'post_status'    => 'publish',
-					'posts_per_page' => $input['per_page'] ?? 10,
+					's'                      => $input['query'],
+					'post_type'              => $input['post_types'] ?? array( 'post', 'page' ),
+					'post_status'            => 'publish',
+					'posts_per_page'         => $input['per_page'] ?? 10,
+					// Performance optimizations.
+					'no_found_rows'          => true,
+					'update_post_term_cache' => false,
+					'update_post_meta_cache' => false,
 				) );
 
 				$results = array();
@@ -2403,17 +2930,14 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['url'] ) ) {
-					return array( 'success' => false, 'message' => 'Plugin URL is required' );
-				}
-
-				if ( ! function_exists( 'download_url' ) ) {
-					require_once ABSPATH . 'wp-admin/includes/file.php';
+					return array( 'success' => false, 'message' => esc_html__( 'Plugin URL is required', 'mcp-expose-abilities' ) );
 				}
 
 				// Download the zip file.
 				$download_file = download_url( $input['url'] );
 				if ( is_wp_error( $download_file ) ) {
-					return array( 'success' => false, 'message' => 'Download failed: ' . $download_file->get_error_message() );
+					/* translators: %s: Error message */
+					return array( 'success' => false, 'message' => esc_html__( 'Download failed: ', 'mcp-expose-abilities' ) . esc_html( $download_file->get_error_message() ) );
 				}
 
 				$result = mcp_expose_install_plugin_zip( $download_file, $input );
@@ -2440,16 +2964,19 @@ function mcp_register_content_abilities(): void {
 	wp_register_ability(
 		'plugins/upload-base64',
 		array(
-			'label'               => 'Upload Plugin (Base64)',
-			'description'         => 'Uploads and installs a plugin from base64-encoded zip content. Can optionally activate after install and overwrite existing plugin.',
+			'label'               => 'Upload Plugin (Base64 or Zip Path)',
+			'description'         => 'Uploads and installs a plugin from base64-encoded zip content or a local zip path. Can optionally activate after install and overwrite existing plugin.',
 			'category'            => 'site',
 			'input_schema'        => array(
 				'type'                 => 'object',
-				'required'             => array( 'content_base64' ),
 				'properties'           => array(
 					'content_base64' => array(
 						'type'        => 'string',
 						'description' => 'Base64-encoded zip file content.',
+					),
+					'zip_path'       => array(
+						'type'        => 'string',
+						'description' => 'Absolute path to a local plugin zip on the WordPress server.',
 					),
 					'filename'       => array(
 						'type'        => 'string',
@@ -2480,15 +3007,25 @@ function mcp_register_content_abilities(): void {
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
 
-				if ( empty( $input['content_base64'] ) ) {
-					return array( 'success' => false, 'message' => 'content_base64 is required' );
+				if ( ! empty( $input['zip_path'] ) ) {
+					$zip_path = wp_normalize_path( $input['zip_path'] );
+					if ( ! is_file( $zip_path ) || ! is_readable( $zip_path ) ) {
+						return array( 'success' => false, 'message' => esc_html__( 'zip_path must point to a readable .zip file', 'mcp-expose-abilities' ) );
+					}
+					if ( ! str_ends_with( $zip_path, '.zip' ) ) {
+						return array( 'success' => false, 'message' => esc_html__( 'zip_path must point to a .zip file', 'mcp-expose-abilities' ) );
+					}
+
+					return mcp_expose_install_plugin_zip( $zip_path, $input );
 				}
 
-				require_once ABSPATH . 'wp-admin/includes/file.php';
+				if ( empty( $input['content_base64'] ) ) {
+					return array( 'success' => false, 'message' => esc_html__( 'content_base64 or zip_path is required', 'mcp-expose-abilities' ) );
+				}
 
 				$decoded = base64_decode( $input['content_base64'], true );
 				if ( false === $decoded ) {
-					return array( 'success' => false, 'message' => 'Invalid base64 payload' );
+					return array( 'success' => false, 'message' => esc_html__( 'Invalid base64 payload', 'mcp-expose-abilities' ) );
 				}
 
 				$filename = ! empty( $input['filename'] ) ? sanitize_file_name( $input['filename'] ) : 'plugin.zip';
@@ -2498,13 +3035,13 @@ function mcp_register_content_abilities(): void {
 
 				$temp_file = wp_tempnam( $filename );
 				if ( ! $temp_file ) {
-					return array( 'success' => false, 'message' => 'Unable to create temporary file' );
+					return array( 'success' => false, 'message' => esc_html__( 'Unable to create temporary file', 'mcp-expose-abilities' ) );
 				}
 
 				$bytes_written = file_put_contents( $temp_file, $decoded );
 				if ( false === $bytes_written ) {
 					wp_delete_file( $temp_file );
-					return array( 'success' => false, 'message' => 'Failed to write temporary zip file' );
+					return array( 'success' => false, 'message' => esc_html__( 'Failed to write temporary zip file', 'mcp-expose-abilities' ) );
 				}
 
 				$result = mcp_expose_install_plugin_zip( $temp_file, $input );
@@ -2555,8 +3092,6 @@ function mcp_register_content_abilities(): void {
 			),
 			'execute_callback'    => function ( $input = array() ): array {
 				$input = is_array( $input ) ? $input : array();
-
-				require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
 				$all_plugins    = get_plugins();
 				$active_plugins = get_option( 'active_plugins', array() );
@@ -2630,7 +3165,7 @@ function mcp_register_content_abilities(): void {
 			),
 			'execute_callback'    => function ( array $input ): array {
 				if ( empty( $input['plugin'] ) ) {
-					return array( 'success' => false, 'message' => 'Plugin parameter is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Plugin parameter is required', 'mcp-expose-abilities' ) );
 				}
 
 				$plugin_file = $input['plugin'];
@@ -2638,30 +3173,26 @@ function mcp_register_content_abilities(): void {
 				// Check if plugin exists.
 				$all_plugins = get_plugins();
 				if ( ! isset( $all_plugins[ $plugin_file ] ) ) {
-					return array( 'success' => false, 'message' => 'Plugin not found: ' . $plugin_file );
+					/* translators: %s: Plugin file name */
+					return array( 'success' => false, 'message' => esc_html__( 'Plugin not found: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ) );
 				}
 
 				// Check if plugin is active.
 				if ( is_plugin_active( $plugin_file ) ) {
-					return array( 'success' => false, 'message' => 'Cannot delete active plugin. Deactivate it first.' );
-				}
-
-				if ( ! function_exists( 'request_filesystem_credentials' ) ) {
-					require_once ABSPATH . 'wp-admin/includes/file.php';
-				}
-				if ( ! function_exists( 'delete_plugins' ) ) {
-					require_once ABSPATH . 'wp-admin/includes/plugin.php';
+					return array( 'success' => false, 'message' => esc_html__( 'Cannot delete active plugin. Deactivate it first.', 'mcp-expose-abilities' ) );
 				}
 
 				// Delete the plugin.
 				$deleted = delete_plugins( array( $plugin_file ) );
 				if ( is_wp_error( $deleted ) ) {
-					return array( 'success' => false, 'message' => 'Delete failed: ' . $deleted->get_error_message() );
+					/* translators: %s: Error message */
+					return array( 'success' => false, 'message' => esc_html__( 'Delete failed: ', 'mcp-expose-abilities' ) . esc_html( $deleted->get_error_message() ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'Plugin deleted successfully: ' . $plugin_file,
+					/* translators: %s: Plugin file name */
+					'message' => esc_html__( 'Plugin deleted successfully: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -2706,7 +3237,7 @@ function mcp_register_content_abilities(): void {
 			),
 			'execute_callback'    => function ( array $input ): array {
 				if ( empty( $input['plugin'] ) ) {
-					return array( 'success' => false, 'message' => 'Plugin parameter is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Plugin parameter is required', 'mcp-expose-abilities' ) );
 				}
 
 				$plugin_file = $input['plugin'];
@@ -2714,23 +3245,23 @@ function mcp_register_content_abilities(): void {
 				// Check if plugin exists.
 				$all_plugins = get_plugins();
 				if ( ! isset( $all_plugins[ $plugin_file ] ) ) {
-					return array( 'success' => false, 'message' => 'Plugin not found: ' . $plugin_file );
+					return array( 'success' => false, 'message' => esc_html__( 'Plugin not found: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ) );
 				}
 
 				// Check if already active.
 				if ( is_plugin_active( $plugin_file ) ) {
-					return array( 'success' => true, 'message' => 'Plugin is already active: ' . $plugin_file );
+					return array( 'success' => true, 'message' => esc_html__( 'Plugin is already active: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ) );
 				}
 
 				// Activate the plugin.
 				$result = activate_plugin( $plugin_file );
 				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'message' => 'Activation failed: ' . $result->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html__( 'Activation failed: ', 'mcp-expose-abilities' ) . esc_html( $result->get_error_message() ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'Plugin activated successfully: ' . $plugin_file,
+					'message' => esc_html__( 'Plugin activated successfully: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -2775,7 +3306,7 @@ function mcp_register_content_abilities(): void {
 			),
 			'execute_callback'    => function ( array $input ): array {
 				if ( empty( $input['plugin'] ) ) {
-					return array( 'success' => false, 'message' => 'Plugin parameter is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Plugin parameter is required', 'mcp-expose-abilities' ) );
 				}
 
 				$plugin_file = $input['plugin'];
@@ -2783,12 +3314,12 @@ function mcp_register_content_abilities(): void {
 				// Check if plugin exists.
 				$all_plugins = get_plugins();
 				if ( ! isset( $all_plugins[ $plugin_file ] ) ) {
-					return array( 'success' => false, 'message' => 'Plugin not found: ' . $plugin_file );
+					return array( 'success' => false, 'message' => esc_html__( 'Plugin not found: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ) );
 				}
 
 				// Check if already inactive.
 				if ( ! is_plugin_active( $plugin_file ) ) {
-					return array( 'success' => true, 'message' => 'Plugin is already inactive: ' . $plugin_file );
+					return array( 'success' => true, 'message' => esc_html__( 'Plugin is already inactive: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ) );
 				}
 
 				// Deactivate the plugin.
@@ -2796,12 +3327,12 @@ function mcp_register_content_abilities(): void {
 
 				// Verify deactivation.
 				if ( is_plugin_active( $plugin_file ) ) {
-					return array( 'success' => false, 'message' => 'Deactivation failed for: ' . $plugin_file );
+					return array( 'success' => false, 'message' => esc_html__( 'Deactivation failed for: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'Plugin deactivated successfully: ' . $plugin_file,
+					'message' => esc_html__( 'Plugin deactivated successfully: ', 'mcp-expose-abilities' ) . esc_html( $plugin_file ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -2827,7 +3358,7 @@ function mcp_register_content_abilities(): void {
 			'description'         => 'List menus. No params.',
 			'category'            => 'site',
 			'input_schema'        => array(
-				'type'                 => 'object',
+				'type'                 => array( 'object', 'null' ),
 				'properties'           => (object) array(),
 				'additionalProperties' => false,
 			),
@@ -2925,12 +3456,12 @@ function mcp_register_content_abilities(): void {
 				}
 
 				if ( ! $menu_id ) {
-					return array( 'success' => false, 'message' => 'Menu ID or location required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu ID or location required', 'mcp-expose-abilities' ) );
 				}
 
 				$menu = wp_get_nav_menu_object( $menu_id );
 				if ( ! $menu ) {
-					return array( 'success' => false, 'message' => 'Menu not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu not found', 'mcp-expose-abilities' ) );
 				}
 
 				$items      = wp_get_nav_menu_items( $menu_id );
@@ -3012,19 +3543,19 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['name'] ) ) {
-					return array( 'success' => false, 'message' => 'Menu name is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu name is required', 'mcp-expose-abilities' ) );
 				}
 
 				$menu_id = wp_create_nav_menu( sanitize_text_field( $input['name'] ) );
 
 				if ( is_wp_error( $menu_id ) ) {
-					return array( 'success' => false, 'message' => $menu_id->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $menu_id->get_error_message() ) );
 				}
 
 				return array(
 					'success' => true,
 					'id'      => $menu_id,
-					'message' => 'Menu created successfully',
+					'message' => esc_html__( 'Menu created successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -3107,15 +3638,15 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['menu_id'] ) ) {
-					return array( 'success' => false, 'message' => 'Menu ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu ID is required', 'mcp-expose-abilities' ) );
 				}
 				if ( empty( $input['title'] ) ) {
-					return array( 'success' => false, 'message' => 'Title is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Title is required', 'mcp-expose-abilities' ) );
 				}
 
 				$menu = wp_get_nav_menu_object( $input['menu_id'] );
 				if ( ! $menu ) {
-					return array( 'success' => false, 'message' => 'Menu not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu not found', 'mcp-expose-abilities' ) );
 				}
 
 				$object    = $input['object'] ?? 'custom';
@@ -3147,13 +3678,13 @@ function mcp_register_content_abilities(): void {
 				$item_id = wp_update_nav_menu_item( $input['menu_id'], 0, $item_data );
 
 				if ( is_wp_error( $item_id ) ) {
-					return array( 'success' => false, 'message' => $item_id->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $item_id->get_error_message() ) );
 				}
 
 				return array(
 					'success' => true,
 					'id'      => $item_id,
-					'message' => 'Menu item added successfully',
+					'message' => esc_html__( 'Menu item added successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -3228,12 +3759,12 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['menu_id'] ) || empty( $input['item_id'] ) ) {
-					return array( 'success' => false, 'message' => 'Menu ID and item ID are required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu ID and item ID are required', 'mcp-expose-abilities' ) );
 				}
 
 				$item = get_post( $input['item_id'] );
 				if ( ! $item || 'nav_menu_item' !== $item->post_type ) {
-					return array( 'success' => false, 'message' => 'Menu item not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu item not found', 'mcp-expose-abilities' ) );
 				}
 
 				$item_data = array(
@@ -3262,12 +3793,12 @@ function mcp_register_content_abilities(): void {
 				$result = wp_update_nav_menu_item( $input['menu_id'], $input['item_id'], $item_data );
 
 				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'message' => $result->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $result->get_error_message() ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'Menu item updated successfully',
+					'message' => esc_html__( 'Menu item updated successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -3314,23 +3845,23 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['item_id'] ) ) {
-					return array( 'success' => false, 'message' => 'Item ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Item ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$item = get_post( $input['item_id'] );
 				if ( ! $item || 'nav_menu_item' !== $item->post_type ) {
-					return array( 'success' => false, 'message' => 'Menu item not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu item not found', 'mcp-expose-abilities' ) );
 				}
 
 				$result = wp_delete_post( $input['item_id'], true );
 
 				if ( ! $result ) {
-					return array( 'success' => false, 'message' => 'Failed to delete menu item' );
+					return array( 'success' => false, 'message' => esc_html__( 'Failed to delete menu item', 'mcp-expose-abilities' ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'Menu item deleted successfully',
+					'message' => esc_html__( 'Menu item deleted successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -3381,12 +3912,12 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( ! isset( $input['menu_id'] ) || empty( $input['location'] ) ) {
-					return array( 'success' => false, 'message' => 'Menu ID and location are required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Menu ID and location are required', 'mcp-expose-abilities' ) );
 				}
 
 				$registered = get_registered_nav_menus();
 				if ( ! isset( $registered[ $input['location'] ] ) ) {
-					return array( 'success' => false, 'message' => 'Invalid menu location' );
+					return array( 'success' => false, 'message' => esc_html__( 'Invalid menu location', 'mcp-expose-abilities' ) );
 				}
 
 				$locations = get_nav_menu_locations();
@@ -3396,7 +3927,8 @@ function mcp_register_content_abilities(): void {
 				$action = $input['menu_id'] > 0 ? 'assigned' : 'unassigned';
 				return array(
 					'success' => true,
-					'message' => "Menu {$action} to location successfully",
+					/* translators: %s: Action ("assigned" or "unassigned"). */
+					'message' => esc_html( sprintf( __( 'Menu %s to location successfully', 'mcp-expose-abilities' ), $action ) ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -3422,7 +3954,7 @@ function mcp_register_content_abilities(): void {
 			'description'         => 'List sidebars. No params.',
 			'category'            => 'site',
 			'input_schema'        => array(
-				'type'                 => 'object',
+				'type'                 => array( 'object', 'null' ),
 				'properties'           => (object) array(),
 				'additionalProperties' => false,
 			),
@@ -3496,12 +4028,12 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['sidebar_id'] ) ) {
-					return array( 'success' => false, 'message' => 'Sidebar ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Sidebar ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$sidebar_id = $input['sidebar_id'];
 				if ( ! isset( $wp_registered_sidebars[ $sidebar_id ] ) ) {
-					return array( 'success' => false, 'message' => 'Sidebar not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Sidebar not found', 'mcp-expose-abilities' ) );
 				}
 
 				// Get sidebars widgets via option (wp_get_sidebars_widgets is flagged by plugin check).
@@ -3552,7 +4084,7 @@ function mcp_register_content_abilities(): void {
 			'description'         => 'List available widgets. No params.',
 			'category'            => 'site',
 			'input_schema'        => array(
-				'type'                 => 'object',
+				'type'                 => array( 'object', 'null' ),
 				'properties'           => (object) array(),
 				'additionalProperties' => false,
 			),
@@ -3741,11 +4273,11 @@ function mcp_register_content_abilities(): void {
 				}
 
 				if ( ! $user ) {
-					return array( 'success' => false, 'message' => 'User not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'User not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'edit_user', $user->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to view this user.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to view this user.', 'mcp-expose-abilities' ) );
 				}
 
 				return array(
@@ -3845,10 +4377,10 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['username'] ) ) {
-					return array( 'success' => false, 'message' => 'Username is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Username is required', 'mcp-expose-abilities' ) );
 				}
 				if ( empty( $input['email'] ) ) {
-					return array( 'success' => false, 'message' => 'Email is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Email is required', 'mcp-expose-abilities' ) );
 				}
 
 				$userdata = array(
@@ -3877,13 +4409,13 @@ function mcp_register_content_abilities(): void {
 				$user_id = wp_insert_user( $userdata );
 
 				if ( is_wp_error( $user_id ) ) {
-					return array( 'success' => false, 'message' => $user_id->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $user_id->get_error_message() ) );
 				}
 
 				return array(
 					'success' => true,
 					'id'      => $user_id,
-					'message' => 'User created successfully',
+					'message' => esc_html__( 'User created successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -3966,16 +4498,16 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'User ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'User ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$user = get_user_by( 'id', $input['id'] );
 				if ( ! $user ) {
-					return array( 'success' => false, 'message' => 'User not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'User not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'edit_user', $user->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to update this user.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to update this user.', 'mcp-expose-abilities' ) );
 				}
 
 				$userdata = array( 'ID' => $input['id'] );
@@ -4000,7 +4532,7 @@ function mcp_register_content_abilities(): void {
 				}
 				if ( isset( $input['role'] ) ) {
 					if ( ! current_user_can( 'promote_user', $user->ID ) ) {
-						return array( 'success' => false, 'message' => 'Permission denied to change user role.' );
+						return array( 'success' => false, 'message' => esc_html__( 'Permission denied to change user role.', 'mcp-expose-abilities' ) );
 					}
 					$userdata['role'] = $input['role'];
 				}
@@ -4014,12 +4546,12 @@ function mcp_register_content_abilities(): void {
 				$result = wp_update_user( $userdata );
 
 				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'message' => $result->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $result->get_error_message() ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'User updated successfully',
+					'message' => esc_html__( 'User updated successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -4070,35 +4602,33 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'User ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'User ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$user = get_user_by( 'id', $input['id'] );
 				if ( ! $user ) {
-					return array( 'success' => false, 'message' => 'User not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'User not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'delete_user', $user->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to delete this user.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to delete this user.', 'mcp-expose-abilities' ) );
 				}
 
 				// Don't allow deleting yourself.
 				if ( $input['id'] === get_current_user_id() ) {
-					return array( 'success' => false, 'message' => 'Cannot delete your own account' );
+					return array( 'success' => false, 'message' => esc_html__( 'Cannot delete your own account', 'mcp-expose-abilities' ) );
 				}
-
-				require_once ABSPATH . 'wp-admin/includes/user.php';
 
 				$reassign = ! empty( $input['reassign_to'] ) ? (int) $input['reassign_to'] : null;
 				$result   = wp_delete_user( $input['id'], $reassign );
 
 				if ( ! $result ) {
-					return array( 'success' => false, 'message' => 'Failed to delete user' );
+					return array( 'success' => false, 'message' => esc_html__( 'Failed to delete user', 'mcp-expose-abilities' ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'User deleted successfully',
+					'message' => esc_html__( 'User deleted successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -4167,19 +4697,16 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['url'] ) ) {
-					return array( 'success' => false, 'message' => 'URL is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'URL is required', 'mcp-expose-abilities' ) );
 				}
-
-				require_once ABSPATH . 'wp-admin/includes/media.php';
-				require_once ABSPATH . 'wp-admin/includes/file.php';
-				require_once ABSPATH . 'wp-admin/includes/image.php';
 
 				$post_id = $input['post_id'] ?? 0;
 
 				// Download file to temp location.
 				$tmp = download_url( $input['url'] );
 				if ( is_wp_error( $tmp ) ) {
-					return array( 'success' => false, 'message' => $tmp->get_error_message() );
+					/* translators: %s: Error message */
+					return array( 'success' => false, 'message' => esc_html( $tmp->get_error_message() ) );
 				}
 
 				// Get filename from URL.
@@ -4202,7 +4729,7 @@ function mcp_register_content_abilities(): void {
 				}
 
 				if ( is_wp_error( $attachment_id ) ) {
-					return array( 'success' => false, 'message' => $attachment_id->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $attachment_id->get_error_message() ) );
 				}
 
 				// Update attachment metadata.
@@ -4232,7 +4759,7 @@ function mcp_register_content_abilities(): void {
 					'success' => true,
 					'id'      => $attachment_id,
 					'url'     => wp_get_attachment_url( $attachment_id ),
-					'message' => 'Media uploaded successfully',
+					'message' => esc_html__( 'Media uploaded successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -4279,16 +4806,16 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Media ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Media ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$attachment = get_post( $input['id'] );
 				if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
-					return array( 'success' => false, 'message' => 'Media not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Media not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'read_post', $attachment->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to view this media item.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to view this media item.', 'mcp-expose-abilities' ) );
 				}
 
 				$metadata = wp_get_attachment_metadata( $input['id'] );
@@ -4385,16 +4912,16 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Media ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Media ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$attachment = get_post( $input['id'] );
 				if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
-					return array( 'success' => false, 'message' => 'Media not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Media not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'edit_post', $attachment->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to update this media item.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to update this media item.', 'mcp-expose-abilities' ) );
 				}
 
 				$post_data = array( 'ID' => $input['id'] );
@@ -4412,7 +4939,7 @@ function mcp_register_content_abilities(): void {
 				$result = wp_update_post( $post_data, true );
 
 				if ( is_wp_error( $result ) ) {
-					return array( 'success' => false, 'message' => $result->get_error_message() );
+					return array( 'success' => false, 'message' => esc_html( $result->get_error_message() ) );
 				}
 
 				if ( isset( $input['alt_text'] ) ) {
@@ -4421,7 +4948,7 @@ function mcp_register_content_abilities(): void {
 
 				return array(
 					'success' => true,
-					'message' => 'Media updated successfully',
+					'message' => esc_html__( 'Media updated successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -4473,28 +5000,28 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['id'] ) ) {
-					return array( 'success' => false, 'message' => 'Media ID is required' );
+					return array( 'success' => false, 'message' => esc_html__( 'Media ID is required', 'mcp-expose-abilities' ) );
 				}
 
 				$attachment = get_post( $input['id'] );
 				if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
-					return array( 'success' => false, 'message' => 'Media not found' );
+					return array( 'success' => false, 'message' => esc_html__( 'Media not found', 'mcp-expose-abilities' ) );
 				}
 
 				if ( ! current_user_can( 'delete_post', $attachment->ID ) ) {
-					return array( 'success' => false, 'message' => 'Permission denied to delete this media item.' );
+					return array( 'success' => false, 'message' => esc_html__( 'Permission denied to delete this media item.', 'mcp-expose-abilities' ) );
 				}
 
 				$force  = $input['force'] ?? true;
 				$result = wp_delete_attachment( $input['id'], $force );
 
 				if ( ! $result ) {
-					return array( 'success' => false, 'message' => 'Failed to delete media' );
+					return array( 'success' => false, 'message' => esc_html__( 'Failed to delete media', 'mcp-expose-abilities' ) );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'Media deleted successfully',
+					'message' => esc_html__( 'Media deleted successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -4542,19 +5069,19 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['name'] ) ) {
-					return array( 'success' => false, 'message' => 'Transient name is required', 'value' => null );
+					return array( 'success' => false, 'message' => esc_html__( 'Transient name is required', 'mcp-expose-abilities' ), 'value' => null );
 				}
 
 				$value = get_transient( $input['name'] );
 
 				if ( false === $value ) {
-					return array( 'success' => false, 'message' => 'Transient not found or expired', 'value' => null );
+					return array( 'success' => false, 'message' => esc_html__( 'Transient not found or expired', 'mcp-expose-abilities' ), 'value' => null );
 				}
 
 				return array(
 					'success' => true,
 					'value'   => $value,
-					'message' => 'Transient retrieved successfully',
+					'message' => esc_html__( 'Transient retrieved successfully', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -4610,11 +5137,11 @@ function mcp_register_content_abilities(): void {
 				$log_file = WP_CONTENT_DIR . '/debug.log';
 
 				if ( ! file_exists( $log_file ) ) {
-					return array( 'success' => false, 'message' => 'Debug log file not found', 'lines' => array() );
+					return array( 'success' => false, 'message' => esc_html__( 'Debug log file not found', 'mcp-expose-abilities' ), 'lines' => array() );
 				}
 
 				if ( ! is_readable( $log_file ) ) {
-					return array( 'success' => false, 'message' => 'Debug log file not readable', 'lines' => array() );
+					return array( 'success' => false, 'message' => esc_html__( 'Debug log file not readable', 'mcp-expose-abilities' ), 'lines' => array() );
 				}
 
 				$num_lines = isset( $input['lines'] ) ? min( max( 1, (int) $input['lines'] ), 500 ) : 50;
@@ -4638,7 +5165,8 @@ function mcp_register_content_abilities(): void {
 				return array(
 					'success' => true,
 					'lines'   => array_values( $result_lines ),
-					'message' => sprintf( 'Returned %d lines', count( $result_lines ) ),
+					/* translators: %d: Number of lines returned. */
+					'message' => esc_html( sprintf( _n( 'Returned %d line', 'Returned %d lines', count( $result_lines ), 'mcp-expose-abilities' ), count( $result_lines ) ) ),
 				);
 			},
 			'permission_callback' => function (): bool {
@@ -4694,29 +5222,26 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( ! isset( $input['debug'] ) ) {
-					return array( 'success' => false, 'message' => 'Missing required parameter: debug', 'changes' => array() );
+					return array( 'success' => false, 'message' => esc_html__( 'Missing required parameter: debug', 'mcp-expose-abilities' ), 'changes' => array() );
 				}
 
 				$wp_config_path = ABSPATH . 'wp-config.php';
 
 				// Initialize WP_Filesystem.
 				global $wp_filesystem;
-				if ( ! function_exists( 'WP_Filesystem' ) ) {
-					require_once ABSPATH . 'wp-admin/includes/file.php';
-				}
 				WP_Filesystem();
 
 				if ( ! $wp_filesystem->exists( $wp_config_path ) ) {
-					return array( 'success' => false, 'message' => 'wp-config.php not found', 'changes' => array() );
+					return array( 'success' => false, 'message' => esc_html__( 'wp-config.php not found', 'mcp-expose-abilities' ), 'changes' => array() );
 				}
 
 				if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
-					return array( 'success' => false, 'message' => 'wp-config.php is not writable', 'changes' => array() );
+					return array( 'success' => false, 'message' => esc_html__( 'wp-config.php is not writable', 'mcp-expose-abilities' ), 'changes' => array() );
 				}
 
 				$content = $wp_filesystem->get_contents( $wp_config_path );
 				if ( false === $content ) {
-					return array( 'success' => false, 'message' => 'Failed to read wp-config.php', 'changes' => array() );
+					return array( 'success' => false, 'message' => esc_html__( 'Failed to read wp-config.php', 'mcp-expose-abilities' ), 'changes' => array() );
 				}
 
 				$changes   = array();
@@ -4788,12 +5313,12 @@ function mcp_register_content_abilities(): void {
 				// Write changes
 				$result = $wp_filesystem->put_contents( $wp_config_path, $content, FS_CHMOD_FILE );
 				if ( false === $result ) {
-					return array( 'success' => false, 'message' => 'Failed to write wp-config.php', 'changes' => array() );
+					return array( 'success' => false, 'message' => esc_html__( 'Failed to write wp-config.php', 'mcp-expose-abilities' ), 'changes' => array() );
 				}
 
 				return array(
 					'success' => true,
-					'message' => 'wp-config.php updated successfully',
+					'message' => esc_html__( 'wp-config.php updated successfully', 'mcp-expose-abilities' ),
 					'changes' => $changes,
 				);
 			},
@@ -4855,7 +5380,7 @@ function mcp_register_content_abilities(): void {
 						'name'    => $name,
 						'value'   => null,
 						'type'    => 'null',
-						'message' => 'Option not found',
+						'message' => esc_html__( 'Option not found', 'mcp-expose-abilities' ),
 					);
 				}
 
@@ -4920,7 +5445,7 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['name'] ) ) {
-					return array( 'success' => false, 'name' => '', 'message' => 'Missing required parameter: name' );
+					return array( 'success' => false, 'name' => '', 'message' => esc_html__( 'Missing required parameter: name', 'mcp-expose-abilities' ) );
 				}
 
 				$name = sanitize_key( $input['name'] );
@@ -4945,7 +5470,8 @@ function mcp_register_content_abilities(): void {
 					return array(
 						'success' => false,
 						'name'    => $name,
-						'message' => "Option '{$name}' is protected and cannot be modified via MCP for security reasons.",
+						/* translators: %s: Option name. */
+						'message' => esc_html( sprintf( __( "Option '%s' is protected and cannot be modified via MCP for security reasons.", 'mcp-expose-abilities' ), $name ) ),
 					);
 				}
 				$new_value = $input['value'];
@@ -5045,7 +5571,7 @@ function mcp_register_content_abilities(): void {
 				$input = is_array( $input ) ? $input : array();
 
 				if ( empty( $input['search'] ) ) {
-					return array( 'success' => false, 'options' => array(), 'total' => 0, 'message' => 'Missing search pattern' );
+					return array( 'success' => false, 'options' => array(), 'total' => 0, 'message' => esc_html__( 'Missing search pattern', 'mcp-expose-abilities' ) );
 				}
 
 				$search   = $input['search'];
@@ -5613,7 +6139,7 @@ function mcp_register_content_abilities(): void {
 
 				return array(
 					'success' => true,
-					'message' => $force ? 'Comment permanently deleted.' : 'Comment moved to trash.',
+					'message' => $force ? esc_html__( 'Comment permanently deleted.', 'mcp-expose-abilities' ) : esc_html__( 'Comment moved to trash.', 'mcp-expose-abilities' ),
 				);
 			},
 			'permission_callback' => function (): bool {
