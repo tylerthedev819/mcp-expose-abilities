@@ -3,7 +3,7 @@ Contributors: devenia
 Tags: mcp, ai, automation, content, rest-api
 Requires at least: 6.9
 Tested up to: 6.9
-Stable tag: 3.0.14
+Stable tag: 3.0.17
 Requires PHP: 8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -25,6 +25,17 @@ Core WordPress abilities for content, menus, users, media, widgets, plugins, opt
 5. (Optional) Install add-on plugins for vendor-specific features
 
 == Changelog ==
+
+= 3.0.17 =
+* Fixed: Use literal text domain in translation calls
+* Fixed: Add translators comments for placeholder strings
+
+= 3.0.16 =
+* Added: include_totals flag and has_more/returned output for list-posts/list-pages/list-media to avoid expensive counts by default
+
+= 3.0.15 =
+* Added: plugins/upload-base64 now accepts zip_path for server-local zip installs
+* Fixed: no-params abilities accept null input (menus/list, widgets/list-sidebars, widgets/list-available)
 
 = 3.0.14 =
 * Fixed: plugins/delete now loads core file helpers before deletion

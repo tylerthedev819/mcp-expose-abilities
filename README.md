@@ -8,7 +8,7 @@ Let AI assistants edit your WordPress site via MCP.
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-purple.svg)](https://php.net)
 
 **Tested up to:** 6.9
-**Stable tag:** 3.0.14
+**Stable tag:** 3.0.17
 **License:** GPLv2 or later
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -126,7 +126,7 @@ Install only what you need. Running GeneratePress? Install that add-on. Don't us
 | Ability | Description |
 |---------|-------------|
 | `plugins/upload` | Upload plugin from URL |
-| `plugins/upload-base64` | Upload plugin from local file (base64) |
+| `plugins/upload-base64` | Upload plugin from local file (base64 or zip path) |
 | `plugins/list` | List installed plugins |
 | `plugins/activate` | Activate installed plugin |
 | `plugins/deactivate` | Deactivate active plugin |
@@ -313,6 +313,17 @@ Three-plugin stack plus optional add-ons:
 4. **Add-on plugins** (optional) - Vendor-specific abilities
 
 ## Changelog
+
+### 3.0.17
+- Fixed: Use literal text domain in translation calls
+- Fixed: Add translators comments for placeholder strings
+
+### 3.0.16
+- Added: `include_totals` flag plus `has_more`/`returned` output for list-posts/list-pages/list-media to avoid expensive counts by default
+
+### 3.0.15
+- Added: plugins/upload-base64 now accepts `zip_path` for server-local zip installs
+- Fixed: no-params abilities accept null input (menus/list, widgets/list-sidebars, widgets/list-available)
 
 ### 3.0.14
 - Fixed: plugins/delete now loads core file helpers before deletion
